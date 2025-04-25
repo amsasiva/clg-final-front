@@ -158,12 +158,21 @@ export default function MySchemePortal() {
   
   // Add state for tracking if filter counts have been loaded
   const [filterCountsLoaded, setFilterCountsLoaded] = useState(false);
+  // Add a loading state for filter counts
+  const [filterCountsLoading, setFilterCountsLoading] = useState(false);
   
   // Add debounce timer ref
   const debounceTimerRef = useRef(null);
   
   // Add ref to track if a request is in progress
   const isRequestInProgressRef = useRef(false);
+  const filterCountsRequestRef = useRef(false);
+
+  // Add additional state for min and max age
+  const [ageRange, setAgeRange] = useState({
+    min: "",
+    max: ""
+  });
 
   useEffect(() => {
     // Check if there's category data in the location state
@@ -173,19 +182,27 @@ export default function MySchemePortal() {
       // Set category name for filters
       const title = location.state.category.title;
       if (title) {
-        // Match the category title to our config keys
+        // Helper function to normalize category names
+        const normalizeCategory = (categoryName) => {
+          return categoryName.replace(/\s*&\s*/g, ' & ').trim();
+        };
+        
+        // Match the category title to our config keys, handling special characters correctly
         Object.keys(categoryFilterConfigs).forEach(key => {
-          if (title.includes(key)) {
+          const normalizedKey = normalizeCategory(key);
+          const normalizedTitle = normalizeCategory(title);
+          
+          if (normalizedTitle.includes(normalizedKey)) {
             setCategoryName(key);
             
             // Auto-set the scheme category filter based on the banner category using full names
             let categoryValue = "";
-            if (title.includes("Health")) categoryValue = "Health & Wellness";
-            else if (title.includes("Housing")) categoryValue = "Housing & Shelter";
-            else if (title.includes("Education")) categoryValue = "Education & Learning";
-            else if (title.includes("Agriculture")) categoryValue = "Agriculture,Rural & Environment";
-            else if (title.includes("Business")) categoryValue = "Business & Entrepreneurship";
-            else if (title.includes("Women")) categoryValue = "Women and Child";
+            if (normalizedTitle.includes("Health")) categoryValue = "Health & Wellness";
+            else if (normalizedTitle.includes("Housing")) categoryValue = "Housing & Shelter";
+            else if (normalizedTitle.includes("Education")) categoryValue = "Education & Learning";
+            else if (normalizedTitle.includes("Agriculture")) categoryValue = "Agriculture,Rural & Environment";
+            else if (normalizedTitle.includes("Business")) categoryValue = "Business & Entrepreneurship";
+            else if (normalizedTitle.includes("Women")) categoryValue = "Women and Child";
             
             setFilters(prev => ({
               ...prev,
@@ -262,12 +279,49 @@ export default function MySchemePortal() {
     }));
   };
 
-  // Handle filter changes with debounce
+  // Update handleFilterChange to handle age range
   const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }));
+    // Special handling for age range inputs
+    if (filterName === "ageMin" || filterName === "ageMax") {
+      const newRange = { ...ageRange };
+      
+      // Update the relevant part of the age range
+      if (filterName === "ageMin") {
+        newRange.min = value;
+      } else {
+        newRange.max = value;
+      }
+      
+      // Set the new age range
+      setAgeRange(newRange);
+      
+      // Only update the filter if both min and max have valid values
+      if (newRange.min && newRange.max && 
+          !isNaN(parseInt(newRange.min)) && !isNaN(parseInt(newRange.max))) {
+        // Format as "min-max" for the API
+        const ageValue = `${newRange.min}-${newRange.max}`;
+        setFilters(prev => ({
+          ...prev,
+          age: ageValue
+        }));
+      } else if (!newRange.min && !newRange.max) {
+        // If both are empty, clear the age filter
+        setFilters(prev => ({
+          ...prev,
+          age: ""
+        }));
+      }
+    } else {
+      // Normal handling for other filters
+      // Normalize the value to handle special characters consistently
+      const normalizedValue = value ? value.replace(/\s*&\s*/g, ' & ').trim() : value;
+      
+      setFilters((prev) => ({
+        ...prev,
+        [filterName]: normalizedValue,
+      }));
+    }
+    
     // Reset to first page when filters change
     setCurrentPage(1);
     
@@ -301,25 +355,40 @@ export default function MySchemePortal() {
       queryParams.append('page', page);
       queryParams.append('limit', itemsPerPage);
       
-      // Add filter parameters if they have values
-      if (filters.age) queryParams.append('age', filters.age);
-      if (filters.gender) queryParams.append('gender', filters.gender);
-      if (filters.caste) queryParams.append('caste', filters.caste);
-      if (filters.occupation) queryParams.append('occupation', filters.occupation);
-      if (filters.residence) queryParams.append('residence', filters.residence);
-      if (filters.applicationMode) queryParams.append('application_mode', filters.applicationMode);
-      if (filters.schemeCategory) queryParams.append('scheme_category', filters.schemeCategory);
-      if (filters.schemeName) queryParams.append('scheme_name', filters.schemeName);
-      if (filters.level) queryParams.append('level', filters.level);
-      if (filters.differentlyAbled) queryParams.append('differently_abled', filters.differentlyAbled);
-      if (filters.maritalStatus) queryParams.append('marital_status', filters.maritalStatus);
-      if (filters.benefitType) queryParams.append('benefit_type', filters.benefitType);
-      if (filters.governmentEmployee) queryParams.append('government_employee', filters.governmentEmployee);
-      if (filters.employmentStatus) queryParams.append('employment_status', filters.employmentStatus);
-      if (filters.minority) queryParams.append('minority', filters.minority);
+      // Helper function to properly encode filter values with special characters
+      const appendFilterParam = (name, value) => {
+        if (value) {
+          // Ensure special characters are properly handled
+          const encodedValue = encodeURIComponent(value.replace(/\s*&\s*/g, ' & ').trim());
+          queryParams.append(name, encodedValue);
+        }
+      };
       
-      // Add search term from the main search bar to scheme_name parameter
-      if (searchTerm.trim()) queryParams.append('scheme_name', searchTerm.trim());
+      // Add filter parameters if they have values
+      // Send age as a range (min-max)
+      if (filters.age) {
+        appendFilterParam('age', filters.age);
+        console.log("Sending age filter:", filters.age);
+      }
+      appendFilterParam('gender', filters.gender);
+      appendFilterParam('caste', filters.caste);
+      appendFilterParam('occupation', filters.occupation);
+      appendFilterParam('residence', filters.residence);
+      appendFilterParam('application_mode', filters.applicationMode);
+      appendFilterParam('scheme_category', filters.schemeCategory);
+      appendFilterParam('scheme_name', filters.schemeName);
+      appendFilterParam('level', filters.level);
+      appendFilterParam('differently_abled', filters.differentlyAbled);
+      appendFilterParam('marital_status', filters.maritalStatus);
+      appendFilterParam('benefit_type', filters.benefitType);
+      appendFilterParam('government_employee', filters.governmentEmployee);
+      appendFilterParam('employment_status', filters.employmentStatus);
+      appendFilterParam('minority', filters.minority);
+      
+      // Add search term from the main search bar
+      if (searchTerm.trim()) {
+        appendFilterParam('scheme_name', searchTerm.trim());
+      }
       
       console.log("Fetching data with params:", queryParams.toString());
       
@@ -349,12 +418,18 @@ export default function MySchemePortal() {
   
   // Fetch filter counts separately
   const fetchFilterCounts = useCallback(async () => {
-    if (filterCountsLoaded) {
-      return; // Only fetch once
+    // Skip if already loaded or currently loading
+    if (filterCountsLoaded || filterCountsLoading || filterCountsRequestRef.current) {
+      return;
     }
     
+    // Set loading state and request flag
+    setFilterCountsLoading(true);
+    filterCountsRequestRef.current = true;
+    
     try {
-      // Make API call with a larger limit to get a representative dataset for counts
+      // Make a single API call with a larger limit to get a representative dataset
+      console.log("Fetching filter counts...");
       const countResponse = await axios.get(
         `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=100`
       );
@@ -362,6 +437,14 @@ export default function MySchemePortal() {
       // Get the schemes and total count
       const schemes = countResponse.data.schemes || [];
       const total = countResponse.data.totalItems || schemes.length;
+      
+      console.log(`Received ${schemes.length} schemes for count calculation`);
+      
+      // Helper function to normalize value formatting
+      const normalizeValue = (value) => {
+        if (!value) return '';
+        return value.toString().trim().toLowerCase().replace(/\s*&\s*/g, ' & ');
+      };
       
       // Calculate filter counts based on actual data
       const counts = {
@@ -382,64 +465,88 @@ export default function MySchemePortal() {
       // Count by iterating through the schemes
       schemes.forEach(scheme => {
         // Gender counts
-        if (scheme.gender === 'female') counts.gender.female++;
-        else if (scheme.gender === 'male') counts.gender.male++;
-        else if (scheme.gender === 'transgender') counts.gender.transgender++;
+        const gender = normalizeValue(scheme.gender);
+        if (gender === 'female') counts.gender.female++;
+        else if (gender === 'male') counts.gender.male++;
+        else if (gender === 'transgender') counts.gender.transgender++;
         
         // Caste counts
-        if (scheme.caste === 'sc') counts.caste.sc++;
-        else if (scheme.caste === 'obc') counts.caste.obc++;
-        else if (scheme.caste === 'st') counts.caste.st++;
-        else if (scheme.caste === 'pvtg') counts.caste.pvtg++;
+        const caste = normalizeValue(scheme.caste);
+        if (caste === 'sc') counts.caste.sc++;
+        else if (caste === 'obc') counts.caste.obc++;
+        else if (caste === 'st') counts.caste.st++;
+        else if (caste === 'pvtg') counts.caste.pvtg++;
         
         // Residence counts
-        if (scheme.residence === 'rural') counts.residence.rural++;
-        else if (scheme.residence === 'urban') counts.residence.urban++;
-        else if (scheme.residence === 'both') counts.residence.both++;
+        const residence = normalizeValue(scheme.residence);
+        if (residence === 'rural') counts.residence.rural++;
+        else if (residence === 'urban') counts.residence.urban++;
+        else if (residence === 'both') counts.residence.both++;
         
         // Level counts
-        if (scheme.level === 'state') counts.level.state++;
-        else if (scheme.level === 'central') counts.level.central++;
+        const level = normalizeValue(scheme.level);
+        if (level === 'state') counts.level.state++;
+        else if (level === 'central') counts.level.central++;
         
         // Differently abled counts
-        if (scheme.differently_abled === 'yes') counts.differentlyAbled.yes++;
-        else if (scheme.differently_abled === 'no') counts.differentlyAbled.no++;
+        const diffAbled = normalizeValue(scheme.differently_abled);
+        if (diffAbled === 'yes') counts.differentlyAbled.yes++;
+        else if (diffAbled === 'no') counts.differentlyAbled.no++;
         
         // Marital status counts
-        if (scheme.marital_status === 'married') counts.maritalStatus.married++;
+        const maritalStatus = normalizeValue(scheme.marital_status);
+        if (maritalStatus === 'married') counts.maritalStatus.married++;
         
         // Occupation counts
-        if (scheme.occupation) {
-          if (!counts.occupation[scheme.occupation]) counts.occupation[scheme.occupation] = 0;
-          counts.occupation[scheme.occupation]++;
+        const occupation = normalizeValue(scheme.occupation);
+        if (occupation) {
+          if (!counts.occupation[occupation]) counts.occupation[occupation] = 0;
+          counts.occupation[occupation]++;
         }
         
         // Application mode counts
-        if (scheme.application_mode === 'offline') counts.applicationMode.offline++;
-        else if (scheme.application_mode === 'online') counts.applicationMode.online++;
+        const appMode = normalizeValue(scheme.application_mode);
+        if (appMode === 'offline') counts.applicationMode.offline++;
+        else if (appMode === 'online') counts.applicationMode.online++;
         
         // Benefit type counts
-        if (scheme.benefit_type === 'cash') counts.benefitType.cash++;
-        else if (scheme.benefit_type === 'in kind') counts.benefitType['in kind']++;
-        else if (scheme.benefit_type === 'composite') counts.benefitType.composite++;
+        const benefitType = normalizeValue(scheme.benefit_type);
+        if (benefitType === 'cash') counts.benefitType.cash++;
+        else if (benefitType === 'in kind') counts.benefitType['in kind']++;
+        else if (benefitType === 'composite') counts.benefitType.composite++;
         
         // Government employee counts
-        if (scheme.government_employee === 'yes') counts.governmentEmployee.yes++;
-        else if (scheme.government_employee === 'no') counts.governmentEmployee.no++;
+        const govEmployee = normalizeValue(scheme.government_employee);
+        if (govEmployee === 'yes') counts.governmentEmployee.yes++;
+        else if (govEmployee === 'no') counts.governmentEmployee.no++;
         
         // Employment status counts
-        if (scheme.employment_status === 'employed') counts.employmentStatus.employed++;
-        else if (scheme.employment_status === 'unemployed') counts.employmentStatus.unemployed++;
-        else if (scheme.employment_status === 'self-employed/entrepreneur') {
+        const empStatus = normalizeValue(scheme.employment_status);
+        if (empStatus === 'employed') counts.employmentStatus.employed++;
+        else if (empStatus === 'unemployed') counts.employmentStatus.unemployed++;
+        else if (empStatus === 'self-employed/entrepreneur') {
           counts.employmentStatus['self-employed/entrepreneur']++;
         }
         
         // Minority counts
-        if (scheme.minority === 'yes') counts.minority.yes++;
-        else if (scheme.minority === 'no') counts.minority.no++;
+        const minority = normalizeValue(scheme.minority);
+        if (minority === 'yes') counts.minority.yes++;
+        else if (minority === 'no') counts.minority.no++;
       });
       
-      // If we don't have real data, use estimations based on percentages
+      // If we have fewer schemes than expected, scale the counts
+      if (schemes.length > 0 && schemes.length < total) {
+        const scaleFactor = total / schemes.length;
+        Object.keys(counts).forEach(filterType => {
+          Object.keys(counts[filterType]).forEach(value => {
+            if (value !== 'all') {
+              counts[filterType][value] = Math.round(counts[filterType][value] * scaleFactor);
+            }
+          });
+        });
+      }
+      
+      // If we don't have any data, use estimations
       if (schemes.length === 0) {
         const estimatedCounts = {
           gender: { all: total, female: Math.round(total * 0.4), male: Math.round(total * 0.4), transgender: Math.round(total * 0.2) },
@@ -469,10 +576,12 @@ export default function MySchemePortal() {
         setFilterCounts(counts);
       }
       
+      console.log("Filter counts calculated successfully");
       setFilterCountsLoaded(true);
+      
     } catch (error) {
       console.error("Error fetching filter counts:", error);
-      // Fallback to estimations
+      // Fallback to estimations if overall fetching fails
       const total = 50; // Default fallback value
       const estimatedCounts = {
         gender: { all: total, female: 20, male: 20, transgender: 10 },
@@ -499,13 +608,18 @@ export default function MySchemePortal() {
       };
       setFilterCounts(estimatedCounts);
       setFilterCountsLoaded(true);
+    } finally {
+      setFilterCountsLoading(false);
+      filterCountsRequestRef.current = false;
     }
-  }, [filterCountsLoaded]);
+  }, []); // Empty dependency array since we control execution with state flags
 
-  // Fetch filter counts on component mount
+  // Fetch filter counts on component mount only once
   useEffect(() => {
-    fetchFilterCounts();
-  }, [fetchFilterCounts]);
+    if (!filterCountsLoaded && !filterCountsLoading && !filterCountsRequestRef.current) {
+      fetchFilterCounts();
+    }
+  }, [fetchFilterCounts, filterCountsLoaded, filterCountsLoading]);
 
   // Call fetchData when page changes only
   useEffect(() => {
@@ -533,7 +647,16 @@ export default function MySchemePortal() {
       clearTimeout(debounceTimerRef.current);
     }
     
+    // Normalize the search term to properly handle special characters
+    const normalizedSearchTerm = searchTerm.replace(/\s*&\s*/g, ' & ').trim();
+    setSearchTerm(normalizedSearchTerm);
+    
     fetchData(1);
+  };
+
+  // Update the search term input handler
+  const handleSearchInputChange = (e) => {
+    setSearchTerm(e.target.value);
   };
 
   // Handle page change
@@ -661,7 +784,7 @@ export default function MySchemePortal() {
                           <option value="Education & Learning">Education & Learning</option>
                           <option value="Health & Wellness">Health & Wellness</option>
                           <option value="Housing & Shelter">Housing & Shelter</option>
-                          <option value="Agriculture,Rural & Environment">Agriculture,Rural & Environment</option>
+                          <option value="Agriculture,Rural & Environment">Agriculture, Rural & Environment</option>
                           <option value="Business & Entrepreneurship">Business & Entrepreneurship</option>
                           <option value="Women and Child">Women and Child</option>
                         </select>
@@ -765,6 +888,8 @@ export default function MySchemePortal() {
                             className="w-1/2 border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
                             min="0"
                             max="120"
+                            value={ageRange.min}
+                            onChange={(e) => handleFilterChange("ageMin", e.target.value)}
                           />
                           <input
                             type="number"
@@ -772,8 +897,11 @@ export default function MySchemePortal() {
                             className="w-1/2 border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
                             min="0"
                             max="120"
+                            value={ageRange.max}
+                            onChange={(e) => handleFilterChange("ageMax", e.target.value)}
                           />
                         </div>
+                        <p className="text-xs text-gray-500 mt-1">Enter age range (e.g., 25-45)</p>
                       </div>
                     )}
                   </div>
@@ -1326,7 +1454,7 @@ export default function MySchemePortal() {
                           placeholder="Search schemes"
                           className="w-full border rounded p-2 pl-8 focus:outline-none focus:ring-2 focus:ring-green-500"
                           value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
+                          onChange={handleSearchInputChange}
                         />
                         <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400">
                           <Search size={18} />
@@ -1509,17 +1637,34 @@ export default function MySchemePortal() {
 
                           <div className="flex justify-between items-center">
                             <div className="flex flex-wrap gap-2">
-                              {/* Fix: Added null check for department */}
+                              {/* Handle department tags while preserving & symbol within tags */}
                               {scheme.department &&
                               typeof scheme.department === "string" ? (
-                                scheme.department.split(" ").map((tag, index) => (
-                                  <span
-                                    key={index}
-                                    className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))
+                                (() => {
+                                  // Get the department string
+                                  const departmentStr = scheme.department;
+                                  
+                                  /* 
+                                   * Solution for handling & in department tags:
+                                   * 1. Replace & with a unique marker that won't be split
+                                   * 2. Split the string by spaces
+                                   * 3. Replace the marker back to & in each tag
+                                   */
+                                  const tags = departmentStr
+                                    .replace(/\s*&\s*/g, "__AMP__") // Replace & with marker
+                                    .split(/\s+/)                   // Split by spaces
+                                    .map(part => part.replace(/__AMP__/g, " & ")); // Restore &
+                                  
+                                  // Render each tag
+                                  return tags.map((tag, index) => (
+                                    <span
+                                      key={index}
+                                      className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full"
+                                    >
+                                      {tag.trim()}
+                                    </span>
+                                  ));
+                                })()
                               ) : (
                                 <span className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">
                                   No Department
