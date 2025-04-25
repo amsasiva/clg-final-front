@@ -133,12 +133,12 @@ function LoginForm() {
           <Link component={NavLink} to="/" color="primary">
             Forgot password?
           </Link>
-          <Typography variant="body2" sx={{ mt: 1 }}>
+          {/* <Typography variant="body2" sx={{ mt: 1 }}>
             Not registered?{" "}
             <Link component={NavLink} to="/reg" color="primary">
               Register here
             </Link>
-          </Typography>
+          </Typography> */}
 
           <Typography variant="body" sx={{ mt: 1 }}>
             Back to{" "}

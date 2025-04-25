@@ -56,71 +56,71 @@ const App = () => {
   };
 
   const cards = [
-    { 
-      id: 1, 
-      title: "🌾", 
+    {
+      id: 1,
+      title: "🌾",
       description: "Agriculture, Rural & Environment",
       category: {
         title: "Agriculture,Rural & Environment",
         subtitle: "Schemes and Programs",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
-    { 
-      id: 2, 
-      title: "🏥", 
+    {
+      id: 2,
+      title: "🏥",
       description: "Health & Wellness",
       category: {
         title: "Health & Wellness",
         subtitle: "Medical Assistance Programs",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
-    { 
-      id: 3, 
-      title: "🎓", 
+    {
+      id: 3,
+      title: "🎓",
       description: "Education & Learning",
       category: {
         title: "Education & Learning",
         subtitle: "Scholarship Programs",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
-    { 
-      id: 4, 
-      title: "🏠", 
+    {
+      id: 4,
+      title: "🏠",
       description: "Housing & Shelter",
       category: {
         title: "Housing & Shelter",
         subtitle: "Affordable Housing Schemes",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
-    { 
-      id: 5, 
-      title: "💼", 
+    {
+      id: 5,
+      title: "💼",
       description: "Business & Entrepreneurship",
       category: {
         title: "Business & Entrepreneurship",
         subtitle: "Startup Schemes",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
-    { 
-      id: 6, 
-      title: "👩‍👧‍👦", 
+    {
+      id: 6,
+      title: "👩‍👧‍👦",
       description: "Women and Child",
       category: {
         title: "Women and Child",
         subtitle: "Support Programs",
-        image: "/api/placeholder/300/150"
-      }
+        image: "/api/placeholder/300/150",
+      },
     },
   ];
 
   // Handle category click and navigate with selected category data
   const handleCategoryClick = (category) => {
-    navigate('/scheme_list', { state: { category: category } });
+    navigate("/scheme_list", { state: { category: category } });
   };
 
   return (
@@ -177,15 +177,17 @@ const App = () => {
                   padding: "10px 24px",
                   boxShadow: "0 4px 14px rgba(34, 197, 94, 0.4)",
                 }}
-                onClick={() => navigate("/scheme_list", { 
-                  state: { 
-                    category: {
-                      title: "All Government Schemes",
-                      subtitle: "Find the Right Program for You",
-                      image: "/api/placeholder/300/150"
-                    } 
-                  }
-                })}
+                onClick={() =>
+                  navigate("/scheme_list", {
+                    state: {
+                      category: {
+                        title: "All Government Schemes",
+                        subtitle: "Find the Right Program for You",
+                        image: "/api/placeholder/300/150",
+                      },
+                    },
+                  })
+                }
               >
                 Find Schemes For You
               </Button>
@@ -223,7 +225,9 @@ const App = () => {
                     },
                   }}
                 >
-                  <CardActionArea onClick={() => handleCategoryClick(card.category)}>
+                  <CardActionArea
+                    onClick={() => handleCategoryClick(card.category)}
+                  >
                     <CardContent sx={{ p: 3 }}>
                       <Typography variant="h2" align="center" sx={{ mb: 2 }}>
                         {card.title}
@@ -426,7 +430,7 @@ const App = () => {
                 schemes without visiting multiple Government websites.
               </Typography>
 
-              <Button
+              {/* <Button
                 variant="outlined"
                 color="success"
                 endIcon={<ChevronRight />}
@@ -439,13 +443,13 @@ const App = () => {
                 }}
               >
                 Learn More
-              </Button>
+              </Button> */}
             </Grid>
 
             <Grid item xs={12} md={6}>
               <Box
                 component="img"
-                src="/api/placeholder/600/400"
+                src="/assets/homescreen-img.png"
                 alt="Tamil Nadu farmers using TNschemes"
                 sx={{
                   width: "100%",

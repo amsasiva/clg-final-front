@@ -16,7 +16,7 @@ function App() {
         <Header />
         <Routes>
           <Route path="/" element={<Homescreen />} />
-          <Route path="/reg" element={<RegForm />} />
+          {/* <Route path="/reg" element={<RegForm />} /> */}
           <Route path="/scheme_list" element={<ApiTable />} />
           <Route path="/login" element={<LoginForm />} />
           {/* <Route path="/forgot" element={<Forgot />} /> */}
