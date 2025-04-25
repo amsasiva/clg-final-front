@@ -133,18 +133,27 @@ export default function MySchemePortal() {
   
   // Add state for filter counts
   const [filterCounts, setFilterCounts] = useState({
-    gender: { all: 0, female: 0, male: 0, transgender: 0 },
-    caste: { all: 0, sc: 0, obc: 0, st: 0, pvtg: 0 },
-    residence: { all: 0, both: 0, rural: 0, urban: 0 },
-    level: { all: 0, state: 0, central: 0 },
-    differentlyAbled: { all: 0, yes: 0, no: 0 },
-    maritalStatus: { all: 0, married: 0 },
-    occupation: {},
-    applicationMode: { all: 0, offline: 0, online: 0 },
-    benefitType: { all: 0, cash: 0, "in kind": 0, composite: 0 },
-    governmentEmployee: { all: 0, yes: 0, no: 0 },
-    employmentStatus: { all: 0, employed: 0, unemployed: 0, "self-employed/entrepreneur": 0 },
-    minority: { all: 0, yes: 0, no: 0 }
+    gender: { all: 50, female: 20, male: 20, transgender: 10 },
+    caste: { all: 50, sc: 15, obc: 15, st: 10, pvtg: 5 },
+    residence: { all: 50, both: 15, rural: 20, urban: 15 },
+    level: { all: 50, state: 30, central: 20 },
+    differentlyAbled: { all: 50, yes: 10, no: 40 },
+    maritalStatus: { all: 50, married: 25 },
+    occupation: { 
+      all: 50, 
+      "construction-worker": 8, 
+      "unorganized-worker": 8,
+      "journalist": 5,
+      "ex-servicemen": 5,
+      "organized-worker": 5,
+      "health-worker": 5,
+      "student": 14
+    },
+    applicationMode: { all: 50, offline: 20, online: 30 },
+    benefitType: { all: 50, cash: 20, "in kind": 15, composite: 15 },
+    governmentEmployee: { all: 50, yes: 15, no: 35 },
+    employmentStatus: { all: 50, employed: 20, unemployed: 15, "self-employed/entrepreneur": 15 },
+    minority: { all: 50, yes: 10, no: 40 }
   });
   
   // Add state for tracking if filter counts have been loaded
@@ -345,17 +354,94 @@ export default function MySchemePortal() {
     }
     
     try {
-      const metadataResponse = await axios.get(
-        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=1`
+      // Make API call with a larger limit to get a representative dataset for counts
+      const countResponse = await axios.get(
+        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=100`
       );
       
-      // If the API provides metadata for filter counts, use it
-      if (metadataResponse.data.metadata && metadataResponse.data.metadata.filterCounts) {
-        setFilterCounts(metadataResponse.data.metadata.filterCounts);
-      } else {
-        // Otherwise calculate approximate counts based on total items
-        const total = metadataResponse.data.totalItems || 0;
-        setFilterCounts({
+      // Get the schemes and total count
+      const schemes = countResponse.data.schemes || [];
+      const total = countResponse.data.totalItems || schemes.length;
+      
+      // Calculate filter counts based on actual data
+      const counts = {
+        gender: { all: total, female: 0, male: 0, transgender: 0 },
+        caste: { all: total, sc: 0, obc: 0, st: 0, pvtg: 0 },
+        residence: { all: total, both: 0, rural: 0, urban: 0 },
+        level: { all: total, state: 0, central: 0 },
+        differentlyAbled: { all: total, yes: 0, no: 0 },
+        maritalStatus: { all: total, married: 0 },
+        occupation: { all: total },
+        applicationMode: { all: total, offline: 0, online: 0 },
+        benefitType: { all: total, cash: 0, "in kind": 0, composite: 0 },
+        governmentEmployee: { all: total, yes: 0, no: 0 },
+        employmentStatus: { all: total, employed: 0, unemployed: 0, "self-employed/entrepreneur": 0 },
+        minority: { all: total, yes: 0, no: 0 }
+      };
+      
+      // Count by iterating through the schemes
+      schemes.forEach(scheme => {
+        // Gender counts
+        if (scheme.gender === 'female') counts.gender.female++;
+        else if (scheme.gender === 'male') counts.gender.male++;
+        else if (scheme.gender === 'transgender') counts.gender.transgender++;
+        
+        // Caste counts
+        if (scheme.caste === 'sc') counts.caste.sc++;
+        else if (scheme.caste === 'obc') counts.caste.obc++;
+        else if (scheme.caste === 'st') counts.caste.st++;
+        else if (scheme.caste === 'pvtg') counts.caste.pvtg++;
+        
+        // Residence counts
+        if (scheme.residence === 'rural') counts.residence.rural++;
+        else if (scheme.residence === 'urban') counts.residence.urban++;
+        else if (scheme.residence === 'both') counts.residence.both++;
+        
+        // Level counts
+        if (scheme.level === 'state') counts.level.state++;
+        else if (scheme.level === 'central') counts.level.central++;
+        
+        // Differently abled counts
+        if (scheme.differently_abled === 'yes') counts.differentlyAbled.yes++;
+        else if (scheme.differently_abled === 'no') counts.differentlyAbled.no++;
+        
+        // Marital status counts
+        if (scheme.marital_status === 'married') counts.maritalStatus.married++;
+        
+        // Occupation counts
+        if (scheme.occupation) {
+          if (!counts.occupation[scheme.occupation]) counts.occupation[scheme.occupation] = 0;
+          counts.occupation[scheme.occupation]++;
+        }
+        
+        // Application mode counts
+        if (scheme.application_mode === 'offline') counts.applicationMode.offline++;
+        else if (scheme.application_mode === 'online') counts.applicationMode.online++;
+        
+        // Benefit type counts
+        if (scheme.benefit_type === 'cash') counts.benefitType.cash++;
+        else if (scheme.benefit_type === 'in kind') counts.benefitType['in kind']++;
+        else if (scheme.benefit_type === 'composite') counts.benefitType.composite++;
+        
+        // Government employee counts
+        if (scheme.government_employee === 'yes') counts.governmentEmployee.yes++;
+        else if (scheme.government_employee === 'no') counts.governmentEmployee.no++;
+        
+        // Employment status counts
+        if (scheme.employment_status === 'employed') counts.employmentStatus.employed++;
+        else if (scheme.employment_status === 'unemployed') counts.employmentStatus.unemployed++;
+        else if (scheme.employment_status === 'self-employed/entrepreneur') {
+          counts.employmentStatus['self-employed/entrepreneur']++;
+        }
+        
+        // Minority counts
+        if (scheme.minority === 'yes') counts.minority.yes++;
+        else if (scheme.minority === 'no') counts.minority.no++;
+      });
+      
+      // If we don't have real data, use estimations based on percentages
+      if (schemes.length === 0) {
+        const estimatedCounts = {
           gender: { all: total, female: Math.round(total * 0.4), male: Math.round(total * 0.4), transgender: Math.round(total * 0.2) },
           caste: { all: total, sc: Math.round(total * 0.3), obc: Math.round(total * 0.3), st: Math.round(total * 0.2), pvtg: Math.round(total * 0.1) },
           residence: { all: total, both: Math.round(total * 0.3), rural: Math.round(total * 0.4), urban: Math.round(total * 0.3) },
@@ -377,11 +463,42 @@ export default function MySchemePortal() {
           governmentEmployee: { all: total, yes: Math.round(total * 0.3), no: Math.round(total * 0.7) },
           employmentStatus: { all: total, employed: Math.round(total * 0.4), unemployed: Math.round(total * 0.3), "self-employed/entrepreneur": Math.round(total * 0.3) },
           minority: { all: total, yes: Math.round(total * 0.2), no: Math.round(total * 0.8) }
-        });
+        };
+        setFilterCounts(estimatedCounts);
+      } else {
+        setFilterCounts(counts);
       }
+      
       setFilterCountsLoaded(true);
     } catch (error) {
       console.error("Error fetching filter counts:", error);
+      // Fallback to estimations
+      const total = 50; // Default fallback value
+      const estimatedCounts = {
+        gender: { all: total, female: 20, male: 20, transgender: 10 },
+        caste: { all: total, sc: 15, obc: 15, st: 10, pvtg: 5 },
+        residence: { all: total, both: 15, rural: 20, urban: 15 },
+        level: { all: total, state: 30, central: 20 },
+        differentlyAbled: { all: total, yes: 10, no: 40 },
+        maritalStatus: { all: total, married: 25 },
+        occupation: { 
+          all: total, 
+          "construction-worker": 8, 
+          "unorganized-worker": 8,
+          "journalist": 5,
+          "ex-servicemen": 5,
+          "organized-worker": 5,
+          "health-worker": 5,
+          "student": 15
+        },
+        applicationMode: { all: total, offline: 20, online: 30 },
+        benefitType: { all: total, cash: 20, "in kind": 15, composite: 15 },
+        governmentEmployee: { all: total, yes: 15, no: 35 },
+        employmentStatus: { all: total, employed: 20, unemployed: 15, "self-employed/entrepreneur": 15 },
+        minority: { all: total, yes: 10, no: 40 }
+      };
+      setFilterCounts(estimatedCounts);
+      setFilterCountsLoaded(true);
     }
   }, [filterCountsLoaded]);
 
@@ -833,7 +950,7 @@ export default function MySchemePortal() {
                       <span className="font-medium">Residence</span>
                       <div className="flex items-center">
                         <span className="text-xs bg-gray-100 rounded-full px-2 py-0.5 mr-1">
-                          {Object.values(filterCounts.residence).filter(count => count > 0).length}
+                          {Math.min(4, Object.keys(filterCounts.residence).filter(key => key !== 'all' && filterCounts.residence[key] > 0).length)}
                         </span>
                         {expandedFilters.residence ? (
                           <ChevronUp size={16} />
@@ -958,23 +1075,44 @@ export default function MySchemePortal() {
                     </div>
                     {expandedFilters.occupation && (
                       <div className="mt-2 max-h-48 overflow-y-auto">
-                        {filterOptions.occupation.map((option, index) => (
-                          <div key={index} className="flex justify-between items-center mb-1">
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="occupation"
-                                className="mr-2"
-                                checked={filters.occupation === option.toLowerCase().replace(/\s+/g, '-')}
-                                onChange={() => handleFilterChange("occupation", option.toLowerCase().replace(/\s+/g, '-'))}
-                              />
-                              <span>{option}</span>
-                            </label>
-                            <span className="text-xs text-gray-500">
-                              {filterCounts.occupation[option.toLowerCase().replace(/\s+/g, '-')] || 0}
-                            </span>
-                          </div>
-                        ))}
+                        {/* "All" option */}
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="occupation"
+                              className="mr-2"
+                              checked={filters.occupation === ""}
+                              onChange={() => handleFilterChange("occupation", "")}
+                            />
+                            <span>All</span>
+                          </label>
+                          <span className="text-xs text-gray-500">
+                            {filterCounts.occupation.all || 0}
+                          </span>
+                        </div>
+                        
+                        {/* Map through other occupation options */}
+                        {filterOptions.occupation.slice(1).map((option, index) => {
+                          const value = option.toLowerCase().replace(/\s+/g, '-');
+                          return (
+                            <div key={index} className="flex justify-between items-center mb-1">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="occupation"
+                                  className="mr-2"
+                                  checked={filters.occupation === value}
+                                  onChange={() => handleFilterChange("occupation", value)}
+                                />
+                                <span>{option}</span>
+                              </label>
+                              <span className="text-xs text-gray-500">
+                                {filterCounts.occupation[value] || 0}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
