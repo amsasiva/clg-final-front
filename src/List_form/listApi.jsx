@@ -727,13 +727,13 @@ export default function MySchemePortal() {
                   <h2 className="text-amber-800 text-2xl font-bold">{bannerCategory.subtitle}</h2>
                 )}
               </div>
-              <div className="flex items-center">
+              {/* <div className="flex items-center">
                 <img
                   src={bannerCategory.image}
                   alt={`${bannerCategory.title} illustration`}
                   className="h-16 md:h-24"
                 />
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
@@ -1485,7 +1485,7 @@ export default function MySchemePortal() {
                   >
                     All Schemes
                   </button>
-                  <button
+                  {/* <button
                     className={`font-medium px-4 py-2 whitespace-nowrap ${
                       activeTab === "state"
                         ? "border-b-2 border-amber-500 text-amber-500"
@@ -1504,7 +1504,7 @@ export default function MySchemePortal() {
                     onClick={() => setActiveTab("central")}
                   >
                     Central Schemes
-                  </button>
+                  </button> */}
                 </div>
 
                 {/* Results count and sort */}
@@ -1562,7 +1562,7 @@ export default function MySchemePortal() {
                             "Scheme ID",
                             "Name",
                             "Benefits",
-                           "Residence",
+                           "Government Employee",
                            "application_mode",
                             "Website",
                           ].map((head) => (
@@ -1581,7 +1581,7 @@ export default function MySchemePortal() {
                             <TableCell>{item.scheme_id}</TableCell>
                             <TableCell>{item.scheme_name}</TableCell>
                             <TableCell>{item.benefits}</TableCell>
-                            <TableCell>{item.residence}</TableCell>
+                            <TableCell>{item.government_employee}</TableCell>
                             <TableCell>{item.application_mode}</TableCell>
                             <TableCell>
                               <a
