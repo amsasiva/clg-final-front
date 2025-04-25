@@ -1,13 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 
 function Header() {
   const navigate = useNavigate();
   const [profileMenu, setProfileMenu] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('user') !== null);
-  const displayName = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).name : '';
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [hasUsername, setHasUsername] = useState(false);
   const [language, setLanguage] = useState('en'); // 'en' for English, 'hi' for Hindi
+
+  // Check user status from localStorage whenever component mounts or localStorage changes
+  useEffect(() => {
+    const checkUserStatus = () => {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setIsLoggedIn(true);
+          setDisplayName(user.name || '');
+          setHasUsername(!!user.username); // Convert to boolean
+        } catch (error) {
+          console.error('Error parsing user data from localStorage:', error);
+          setIsLoggedIn(false);
+          setDisplayName('');
+          setHasUsername(false);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setDisplayName('');
+        setHasUsername(false);
+      }
+    };
+
+    // Initial check
+    checkUserStatus();
+
+    // Add event listener for localStorage changes
+    window.addEventListener('storage', checkUserStatus);
+
+    // Clean up event listener
+    return () => {
+      window.removeEventListener('storage', checkUserStatus);
+    };
+  }, []);
 
   const handleProfileClick = () => {
     setProfileMenu(!profileMenu);
@@ -16,6 +52,8 @@ function Header() {
   const handleLogout = () => {
     localStorage.removeItem('user');
     setIsLoggedIn(false);
+    setDisplayName('');
+    setHasUsername(false);
     navigate('/');
   };
 
@@ -43,10 +81,18 @@ function Header() {
               
               {profileMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-20">
-                  <button className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100">
-                    Profile
-                  </button>
-                  <div className="border-t border-gray-100"></div>
+                  {hasUsername && (
+                    <button 
+                      onClick={() => {
+                        navigate('/profile');
+                        setProfileMenu(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                    >
+                      Profile
+                    </button>
+                  )}
+                  {hasUsername && <div className="border-t border-gray-100"></div>}
                   <button 
                     onClick={handleLogout}
                     className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
   ChevronDown,
@@ -130,6 +130,40 @@ export default function MySchemePortal() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(""); // Add state for search term
   const [totalItems, setTotalItems] = useState(0); // Add state for total items count
+  
+  // Add state for filter counts
+  const [filterCounts, setFilterCounts] = useState({
+    gender: { all: 50, female: 20, male: 20, transgender: 10 },
+    caste: { all: 50, sc: 15, obc: 15, st: 10, pvtg: 5 },
+    residence: { all: 50, both: 15, rural: 20, urban: 15 },
+    level: { all: 50, state: 30, central: 20 },
+    differentlyAbled: { all: 50, yes: 10, no: 40 },
+    maritalStatus: { all: 50, married: 25 },
+    occupation: { 
+      all: 50, 
+      "construction-worker": 8, 
+      "unorganized-worker": 8,
+      "journalist": 5,
+      "ex-servicemen": 5,
+      "organized-worker": 5,
+      "health-worker": 5,
+      "student": 14
+    },
+    applicationMode: { all: 50, offline: 20, online: 30 },
+    benefitType: { all: 50, cash: 20, "in kind": 15, composite: 15 },
+    governmentEmployee: { all: 50, yes: 15, no: 35 },
+    employmentStatus: { all: 50, employed: 20, unemployed: 15, "self-employed/entrepreneur": 15 },
+    minority: { all: 50, yes: 10, no: 40 }
+  });
+  
+  // Add state for tracking if filter counts have been loaded
+  const [filterCountsLoaded, setFilterCountsLoaded] = useState(false);
+  
+  // Add debounce timer ref
+  const debounceTimerRef = useRef(null);
+  
+  // Add ref to track if a request is in progress
+  const isRequestInProgressRef = useRef(false);
 
   useEffect(() => {
     // Check if there's category data in the location state
@@ -228,6 +262,7 @@ export default function MySchemePortal() {
     }));
   };
 
+  // Handle filter changes with debounce
   const handleFilterChange = (filterName, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -235,11 +270,29 @@ export default function MySchemePortal() {
     }));
     // Reset to first page when filters change
     setCurrentPage(1);
+    
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Set a new timer to delay the API call
+    debounceTimerRef.current = setTimeout(() => {
+      fetchData(1);
+    }, 500); // 500ms debounce delay
   };
 
   // Fetch data from API with filters and pagination
-  const fetchData = async (page = 1) => {
+  const fetchData = useCallback(async (page = 1) => {
+    // If a request is already in progress, don't start another one
+    if (isRequestInProgressRef.current) {
+      console.log("Request already in progress, skipping...");
+      return;
+    }
+    
+    isRequestInProgressRef.current = true;
     setLoading(true);
+    
     try {
       // Build query parameters based on active filters
       const queryParams = new URLSearchParams();
@@ -268,6 +321,8 @@ export default function MySchemePortal() {
       // Add search term from the main search bar to scheme_name parameter
       if (searchTerm.trim()) queryParams.append('scheme_name', searchTerm.trim());
       
+      console.log("Fetching data with params:", queryParams.toString());
+      
       // Make the API call
       const response = await axios.get(
         `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?${queryParams.toString()}`
@@ -288,14 +343,198 @@ export default function MySchemePortal() {
       setTotalItems(0);
     } finally {
       setLoading(false);
+      isRequestInProgressRef.current = false;
     }
-  };
+  }, [filters, searchTerm, itemsPerPage]);
+  
+  // Fetch filter counts separately
+  const fetchFilterCounts = useCallback(async () => {
+    if (filterCountsLoaded) {
+      return; // Only fetch once
+    }
+    
+    try {
+      // Make API call with a larger limit to get a representative dataset for counts
+      const countResponse = await axios.get(
+        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=100`
+      );
+      
+      // Get the schemes and total count
+      const schemes = countResponse.data.schemes || [];
+      const total = countResponse.data.totalItems || schemes.length;
+      
+      // Calculate filter counts based on actual data
+      const counts = {
+        gender: { all: total, female: 0, male: 0, transgender: 0 },
+        caste: { all: total, sc: 0, obc: 0, st: 0, pvtg: 0 },
+        residence: { all: total, both: 0, rural: 0, urban: 0 },
+        level: { all: total, state: 0, central: 0 },
+        differentlyAbled: { all: total, yes: 0, no: 0 },
+        maritalStatus: { all: total, married: 0 },
+        occupation: { all: total },
+        applicationMode: { all: total, offline: 0, online: 0 },
+        benefitType: { all: total, cash: 0, "in kind": 0, composite: 0 },
+        governmentEmployee: { all: total, yes: 0, no: 0 },
+        employmentStatus: { all: total, employed: 0, unemployed: 0, "self-employed/entrepreneur": 0 },
+        minority: { all: total, yes: 0, no: 0 }
+      };
+      
+      // Count by iterating through the schemes
+      schemes.forEach(scheme => {
+        // Gender counts
+        if (scheme.gender === 'female') counts.gender.female++;
+        else if (scheme.gender === 'male') counts.gender.male++;
+        else if (scheme.gender === 'transgender') counts.gender.transgender++;
+        
+        // Caste counts
+        if (scheme.caste === 'sc') counts.caste.sc++;
+        else if (scheme.caste === 'obc') counts.caste.obc++;
+        else if (scheme.caste === 'st') counts.caste.st++;
+        else if (scheme.caste === 'pvtg') counts.caste.pvtg++;
+        
+        // Residence counts
+        if (scheme.residence === 'rural') counts.residence.rural++;
+        else if (scheme.residence === 'urban') counts.residence.urban++;
+        else if (scheme.residence === 'both') counts.residence.both++;
+        
+        // Level counts
+        if (scheme.level === 'state') counts.level.state++;
+        else if (scheme.level === 'central') counts.level.central++;
+        
+        // Differently abled counts
+        if (scheme.differently_abled === 'yes') counts.differentlyAbled.yes++;
+        else if (scheme.differently_abled === 'no') counts.differentlyAbled.no++;
+        
+        // Marital status counts
+        if (scheme.marital_status === 'married') counts.maritalStatus.married++;
+        
+        // Occupation counts
+        if (scheme.occupation) {
+          if (!counts.occupation[scheme.occupation]) counts.occupation[scheme.occupation] = 0;
+          counts.occupation[scheme.occupation]++;
+        }
+        
+        // Application mode counts
+        if (scheme.application_mode === 'offline') counts.applicationMode.offline++;
+        else if (scheme.application_mode === 'online') counts.applicationMode.online++;
+        
+        // Benefit type counts
+        if (scheme.benefit_type === 'cash') counts.benefitType.cash++;
+        else if (scheme.benefit_type === 'in kind') counts.benefitType['in kind']++;
+        else if (scheme.benefit_type === 'composite') counts.benefitType.composite++;
+        
+        // Government employee counts
+        if (scheme.government_employee === 'yes') counts.governmentEmployee.yes++;
+        else if (scheme.government_employee === 'no') counts.governmentEmployee.no++;
+        
+        // Employment status counts
+        if (scheme.employment_status === 'employed') counts.employmentStatus.employed++;
+        else if (scheme.employment_status === 'unemployed') counts.employmentStatus.unemployed++;
+        else if (scheme.employment_status === 'self-employed/entrepreneur') {
+          counts.employmentStatus['self-employed/entrepreneur']++;
+        }
+        
+        // Minority counts
+        if (scheme.minority === 'yes') counts.minority.yes++;
+        else if (scheme.minority === 'no') counts.minority.no++;
+      });
+      
+      // If we don't have real data, use estimations based on percentages
+      if (schemes.length === 0) {
+        const estimatedCounts = {
+          gender: { all: total, female: Math.round(total * 0.4), male: Math.round(total * 0.4), transgender: Math.round(total * 0.2) },
+          caste: { all: total, sc: Math.round(total * 0.3), obc: Math.round(total * 0.3), st: Math.round(total * 0.2), pvtg: Math.round(total * 0.1) },
+          residence: { all: total, both: Math.round(total * 0.3), rural: Math.round(total * 0.4), urban: Math.round(total * 0.3) },
+          level: { all: total, state: Math.round(total * 0.6), central: Math.round(total * 0.4) },
+          differentlyAbled: { all: total, yes: Math.round(total * 0.2), no: Math.round(total * 0.8) },
+          maritalStatus: { all: total, married: Math.round(total * 0.5) },
+          occupation: { 
+            all: total, 
+            "construction-worker": Math.round(total * 0.15), 
+            "unorganized-worker": Math.round(total * 0.15),
+            "journalist": Math.round(total * 0.1),
+            "ex-servicemen": Math.round(total * 0.1),
+            "organized-worker": Math.round(total * 0.1),
+            "health-worker": Math.round(total * 0.1),
+            "student": Math.round(total * 0.3)
+          },
+          applicationMode: { all: total, offline: Math.round(total * 0.4), online: Math.round(total * 0.6) },
+          benefitType: { all: total, cash: Math.round(total * 0.4), "in kind": Math.round(total * 0.3), composite: Math.round(total * 0.3) },
+          governmentEmployee: { all: total, yes: Math.round(total * 0.3), no: Math.round(total * 0.7) },
+          employmentStatus: { all: total, employed: Math.round(total * 0.4), unemployed: Math.round(total * 0.3), "self-employed/entrepreneur": Math.round(total * 0.3) },
+          minority: { all: total, yes: Math.round(total * 0.2), no: Math.round(total * 0.8) }
+        };
+        setFilterCounts(estimatedCounts);
+      } else {
+        setFilterCounts(counts);
+      }
+      
+      setFilterCountsLoaded(true);
+    } catch (error) {
+      console.error("Error fetching filter counts:", error);
+      // Fallback to estimations
+      const total = 50; // Default fallback value
+      const estimatedCounts = {
+        gender: { all: total, female: 20, male: 20, transgender: 10 },
+        caste: { all: total, sc: 15, obc: 15, st: 10, pvtg: 5 },
+        residence: { all: total, both: 15, rural: 20, urban: 15 },
+        level: { all: total, state: 30, central: 20 },
+        differentlyAbled: { all: total, yes: 10, no: 40 },
+        maritalStatus: { all: total, married: 25 },
+        occupation: { 
+          all: total, 
+          "construction-worker": 8, 
+          "unorganized-worker": 8,
+          "journalist": 5,
+          "ex-servicemen": 5,
+          "organized-worker": 5,
+          "health-worker": 5,
+          "student": 15
+        },
+        applicationMode: { all: total, offline: 20, online: 30 },
+        benefitType: { all: total, cash: 20, "in kind": 15, composite: 15 },
+        governmentEmployee: { all: total, yes: 15, no: 35 },
+        employmentStatus: { all: total, employed: 20, unemployed: 15, "self-employed/entrepreneur": 15 },
+        minority: { all: total, yes: 10, no: 40 }
+      };
+      setFilterCounts(estimatedCounts);
+      setFilterCountsLoaded(true);
+    }
+  }, [filterCountsLoaded]);
 
-  // Call fetchData when filters change or page changes
+  // Fetch filter counts on component mount
   useEffect(() => {
+    fetchFilterCounts();
+  }, [fetchFilterCounts]);
+
+  // Call fetchData when page changes only
+  useEffect(() => {
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
     fetchData(currentPage);
-  }, [currentPage, filters.age, filters.gender, filters.caste, filters.occupation, 
-      filters.residence, filters.applicationMode, filters.schemeCategory, searchTerm]);
+  }, [currentPage, fetchData]);
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchData(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle search submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setCurrentPage(1); // Reset to first page when searching
+    
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    fetchData(1);
+  };
 
   // Handle page change
   const handlePageChange = (pageNumber) => {
@@ -350,13 +589,6 @@ export default function MySchemePortal() {
     return currentFilterConfig.includes(filterName);
   };
 
-  // Handle search submission
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setCurrentPage(1); // Reset to first page when searching
-    fetchData(1);
-  };
-
   return (
     <ErrorBoundary>
       <div className="flex flex-col min-h-screen bg-gray-50">
@@ -403,36 +635,7 @@ export default function MySchemePortal() {
                   </button>
                 </div>
 
-                {/* Scheme Name Filter */}
-                {shouldShowFilter("schemeName") && (
-                  <div className="mb-4 border-b pb-2">
-                    <div
-                      className="flex justify-between items-center cursor-pointer"
-                      onClick={() => toggleFilter("schemeName")}
-                    >
-                      <span className="font-medium">Scheme Name</span>
-                      {expandedFilters.schemeName ? (
-                        <ChevronUp size={16} />
-                      ) : (
-                        <ChevronDown size={16} />
-                      )}
-                    </div>
-                    {expandedFilters.schemeName && (
-                      <div className="mt-2">
-                        <input
-                          type="text"
-                          placeholder="Search scheme name"
-                          className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                          value={filters.schemeName}
-                          onChange={(e) =>
-                            handleFilterChange("schemeName", e.target.value)
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
+       
                 {/* Scheme Category Filter */}
                 {shouldShowFilter("schemeCategory") && (
                   <div className="mb-4 border-b pb-2">
@@ -496,6 +699,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.level[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -523,7 +729,7 @@ export default function MySchemePortal() {
                           <div className="flex items-center">
                             <span>Tamil Nadu</span>
                             <button
-                              onClick={() => handleFilterChange("state", "")}
+                              onClick={(e) => handleFilterChange("state", "")}
                               className="ml-2 text-xs text-gray-500 hover:text-gray-700"
                             >
                               ×
@@ -600,7 +806,7 @@ export default function MySchemePortal() {
                             />
                             <span>All</span>
                           </label>
-                          <span className="text-xs text-gray-500">52</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.all || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -613,7 +819,7 @@ export default function MySchemePortal() {
                             />
                             <span>Female</span>
                           </label>
-                          <span className="text-xs text-gray-500">10</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.female || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -626,7 +832,7 @@ export default function MySchemePortal() {
                             />
                             <span>Male</span>
                           </label>
-                          <span className="text-xs text-gray-500">5</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.male || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <label className="flex items-center cursor-pointer">
@@ -635,13 +841,11 @@ export default function MySchemePortal() {
                               name="gender"
                               className="mr-2"
                               checked={filters.gender === "transgender"}
-                              onChange={() =>
-                                handleFilterChange("gender", "transgender")
-                              }
+                              onChange={() => handleFilterChange("gender", "transgender")}
                             />
                             <span>Transgender</span>
                           </label>
-                          <span className="text-xs text-gray-500">1</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.transgender || 0}</span>
                         </div>
                       </div>
                     )}
@@ -675,7 +879,7 @@ export default function MySchemePortal() {
                             />
                             <span>All</span>
                           </label>
-                          <span className="text-xs text-gray-500">74</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.all || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -688,7 +892,7 @@ export default function MySchemePortal() {
                             />
                             <span>Scheduled Caste (SC)</span>
                           </label>
-                          <span className="text-xs text-gray-500">12</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.sc || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -701,7 +905,7 @@ export default function MySchemePortal() {
                             />
                             <span>Other Backward Class (OBC)</span>
                           </label>
-                          <span className="text-xs text-gray-500">4</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.obc || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -714,7 +918,7 @@ export default function MySchemePortal() {
                             />
                             <span>Scheduled Tribe (ST)</span>
                           </label>
-                          <span className="text-xs text-gray-500">3</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.st || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <label className="flex items-center cursor-pointer">
@@ -727,45 +931,14 @@ export default function MySchemePortal() {
                             />
                             <span>Particularly Vulnerable Tribal Group</span>
                           </label>
-                          <span className="text-xs text-gray-500">1</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.pvtg || 0}</span>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Ministry Name Filter */}
-                <div className="mb-4 border-b pb-2">
-                  <div
-                    className="flex justify-between items-center cursor-pointer"
-                    onClick={() => toggleFilter("ministry")}
-                  >
-                    <span className="font-medium">Ministry Name</span>
-                    {expandedFilters.ministry ? (
-                      <ChevronUp size={16} />
-                    ) : (
-                      <ChevronDown size={16} />
-                    )}
-                  </div>
-                  {expandedFilters.ministry && (
-                    <div className="mt-2">
-                      <select
-                        className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        value={filters.ministry}
-                        onChange={(e) =>
-                          handleFilterChange("ministry", e.target.value)
-                        }
-                      >
-                        <option value="">Select</option>
-                        <option value="finance">Ministry of Finance</option>
-                        <option value="rural">Ministry of Rural Development</option>
-                        <option value="labour">
-                          Ministry of Labour and Employment
-                        </option>
-                      </select>
-                    </div>
-                  )}
-                </div>
+   
 
                 {/* Residence Filter */}
                 {shouldShowFilter("residence") && (
@@ -777,7 +950,7 @@ export default function MySchemePortal() {
                       <span className="font-medium">Residence</span>
                       <div className="flex items-center">
                         <span className="text-xs bg-gray-100 rounded-full px-2 py-0.5 mr-1">
-                          4
+                          {Math.min(4, Object.keys(filterCounts.residence).filter(key => key !== 'all' && filterCounts.residence[key] > 0).length)}
                         </span>
                         {expandedFilters.residence ? (
                           <ChevronUp size={16} />
@@ -800,6 +973,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.residence[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -835,6 +1011,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.differentlyAbled[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -870,6 +1049,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.maritalStatus[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -893,20 +1075,44 @@ export default function MySchemePortal() {
                     </div>
                     {expandedFilters.occupation && (
                       <div className="mt-2 max-h-48 overflow-y-auto">
-                        {filterOptions.occupation.map((option, index) => (
-                          <div key={index} className="flex justify-between items-center mb-1">
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="radio"
-                                name="occupation"
-                                className="mr-2"
-                                checked={filters.occupation === option.toLowerCase().replace(/\s+/g, '-')}
-                                onChange={() => handleFilterChange("occupation", option.toLowerCase().replace(/\s+/g, '-'))}
-                              />
-                              <span>{option}</span>
-                            </label>
-                          </div>
-                        ))}
+                        {/* "All" option */}
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="occupation"
+                              className="mr-2"
+                              checked={filters.occupation === ""}
+                              onChange={() => handleFilterChange("occupation", "")}
+                            />
+                            <span>All</span>
+                          </label>
+                          <span className="text-xs text-gray-500">
+                            {filterCounts.occupation.all || 0}
+                          </span>
+                        </div>
+                        
+                        {/* Map through other occupation options */}
+                        {filterOptions.occupation.slice(1).map((option, index) => {
+                          const value = option.toLowerCase().replace(/\s+/g, '-');
+                          return (
+                            <div key={index} className="flex justify-between items-center mb-1">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="occupation"
+                                  className="mr-2"
+                                  checked={filters.occupation === value}
+                                  onChange={() => handleFilterChange("occupation", value)}
+                                />
+                                <span>{option}</span>
+                              </label>
+                              <span className="text-xs text-gray-500">
+                                {filterCounts.occupation[value] || 0}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -940,6 +1146,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.applicationMode[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -975,6 +1184,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.benefitType[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1045,6 +1257,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.employmentStatus[option.toLowerCase().replace(/\s+/g, '-')] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1080,6 +1295,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.minority[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1215,11 +1433,9 @@ export default function MySchemePortal() {
                           {[
                             "Scheme ID",
                             "Name",
-                            "Description",
-                            "Department",
-                            "Eligibility",
                             "Benefits",
-                            "Process",
+                           "Residence",
+                           "application_mode",
                             "Website",
                           ].map((head) => (
                             <TableCell
@@ -1236,11 +1452,9 @@ export default function MySchemePortal() {
                           <TableRow key={item.scheme_id}>
                             <TableCell>{item.scheme_id}</TableCell>
                             <TableCell>{item.scheme_name}</TableCell>
-                            <TableCell>{item.description}</TableCell>
-                            <TableCell>{item.department}</TableCell>
-                            <TableCell>{item.eligibility_criteria}</TableCell>
                             <TableCell>{item.benefits}</TableCell>
-                            <TableCell>{item.application_process}</TableCell>
+                            <TableCell>{item.residence}</TableCell>
+                            <TableCell>{item.application_mode}</TableCell>
                             <TableCell>
                               <a
                                 href={item.official_website}
@@ -1290,14 +1504,6 @@ export default function MySchemePortal() {
                                 Benefits:
                               </h4>
                               <p className="text-sm">{scheme.benefits}</p>
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-gray-700">
-                                Process:
-                              </h4>
-                              <p className="text-sm">
-                                {scheme.application_process}
-                              </p>
                             </div>
                           </div>
 
