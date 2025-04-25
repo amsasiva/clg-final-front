@@ -1,0 +1,1427 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  ChevronRight,
+  ChevronLeft,
+  Facebook,
+  Twitter,
+  Instagram,
+  Youtube,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Button,
+  CircularProgress,
+} from "@mui/material";
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <h1>Something went wrong. Please try again later.</h1>;
+    }
+    return this.props.children;
+  }
+}
+
+// Define category-specific filter configurations
+const categoryFilterConfigs = {
+  default: [
+    "state", "gender", "caste", "ministry", "residence", 
+    "benefitType", "dbtScheme", "maritalStatus"
+  ],
+  
+  "Health & Wellness": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "differentlyAbled", "maritalStatus", "occupation", "applicationMode", "residence"
+  ],
+  
+  "Housing & Shelter": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "differentlyAbled", "maritalStatus", "occupation", "applicationMode", 
+    "benefitType", "governmentEmployee"
+  ],
+  
+  "Education & Learning": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "maritalStatus", "occupation", "applicationMode", "residence", 
+    "benefitType", "employmentStatus", "minority"
+  ],
+  
+  "Agriculture,Rural & Environment": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "occupation", "applicationMode", "residence", "benefitType", 
+    "employmentStatus", "minority"
+  ],
+  
+  "Business & Entrepreneurship": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "occupation", "applicationMode", "residence", "benefitType", 
+    "employmentStatus", "minority"
+  ],
+  
+  "Women and Child": [
+    "schemeName", "schemeCategory", "level", "gender", "age", "caste", 
+    "maritalStatus", "occupation", "applicationMode", "residence", 
+    "benefitType", "employmentStatus", "minority"
+  ]
+};
+
+// Define filter options for each filter type
+const filterOptions = {
+  level: ["All", "State", "Central"],
+  differentlyAbled: ["All", "Yes", "No"],
+  maritalStatus: ["All", "Married"],
+  occupation: [
+    "All", "Construction Worker", "Unorganized Worker", "Journalist", 
+    "Ex Servicemen", "Organized Worker", "Health Worker", "Student"
+  ],
+  applicationMode: ["All", "Offline", "Online"],
+  residence: ["All", "Both", "Rural", "Urban"],
+  benefitType: ["All", "Cash", "In Kind", "Composite"],
+  governmentEmployee: ["All", "Yes", "No"],
+  employmentStatus: ["All", "Employed", "Unemployed", "Self-Employed/Entrepreneur"],
+  minority: ["All", "Yes", "No"]
+};
+
+export default function MySchemePortal() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get category from location state or default to "Banking, Financial Services"
+  const [bannerCategory, setBannerCategory] = useState({
+    title: "Banking, Financial Services",
+    subtitle: "and Insurance",
+    image: "/api/placeholder/300/150"
+  });
+
+  // State for the category name used to determine which filters to show
+  const [categoryName, setCategoryName] = useState("default");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // Add state for search term
+  const [totalItems, setTotalItems] = useState(0); // Add state for total items count
+
+  useEffect(() => {
+    // Check if there's category data in the location state
+    if (location.state && location.state.category) {
+      setBannerCategory(location.state.category);
+      
+      // Set category name for filters
+      const title = location.state.category.title;
+      if (title) {
+        // Match the category title to our config keys
+        Object.keys(categoryFilterConfigs).forEach(key => {
+          if (title.includes(key)) {
+            setCategoryName(key);
+            
+            // Auto-set the scheme category filter based on the banner category using full names
+            let categoryValue = "";
+            if (title.includes("Health")) categoryValue = "Health & Wellness";
+            else if (title.includes("Housing")) categoryValue = "Housing & Shelter";
+            else if (title.includes("Education")) categoryValue = "Education & Learning";
+            else if (title.includes("Agriculture")) categoryValue = "Agriculture,Rural & Environment";
+            else if (title.includes("Business")) categoryValue = "Business & Entrepreneurship";
+            else if (title.includes("Women")) categoryValue = "Women and Child";
+            
+            setFilters(prev => ({
+              ...prev,
+              schemeCategory: categoryValue
+            }));
+          }
+        });
+      }
+    }
+  }, [location]);
+
+  // Get the current filter config based on category
+  const currentFilterConfig = categoryFilterConfigs[categoryName] || categoryFilterConfigs.default;
+
+  // State from original implementation
+  const [filters, setFilters] = useState({
+    state: "Tamil Nadu",
+    gender: "",
+    caste: "",
+    ministry: "",
+    residence: "",
+    schemeName: "",
+    schemeCategory: "",
+    level: "",
+    age: "",
+    differentlyAbled: "",
+    maritalStatus: "",
+    occupation: "",
+    applicationMode: "",
+    benefitType: "",
+    governmentEmployee: "",
+    employmentStatus: "",
+    minority: ""
+  });
+
+  const [expandedFilters, setExpandedFilters] = useState({
+    state: true,
+    gender: true,
+    caste: true,
+    ministry: true,
+    residence: true,
+    benefitType: true,
+    dbtScheme: true,
+    maritalStatus: true,
+    disabilityPercentage: true,
+    belowPovertyLine: true,
+    employmentStatus: true,
+    student: true,
+    occupation: true,
+    applicationMode: true,
+    schemeType: true,
+    schemeName: true,
+    schemeCategory: true,
+    level: true,
+    age: true,
+    differentlyAbled: true,
+    governmentEmployee: true,
+    minority: true
+  });
+
+  // State from provided code
+  const [posts, setPosts] = useState([]);
+  const [activeTab, setActiveTab] = useState("all"); // For tab navigation
+  const [viewMode, setViewMode] = useState("list"); // For view toggle (list/table)
+  const hasFetched = useRef(false);
+
+  // Sample schemes if API fetch fails
+  const sampleSchemes = [ ];
+
+  const toggleFilter = (filter) => {
+    setExpandedFilters((prev) => ({
+      ...prev,
+      [filter]: !prev[filter],
+    }));
+  };
+
+  const handleFilterChange = (filterName, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterName]: value,
+    }));
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  };
+
+  // Fetch data from API with filters and pagination
+  const fetchData = async (page = 1) => {
+    setLoading(true);
+    try {
+      // Build query parameters based on active filters
+      const queryParams = new URLSearchParams();
+      
+      // Add pagination parameters
+      queryParams.append('page', page);
+      queryParams.append('limit', itemsPerPage);
+      
+      // Add filter parameters if they have values
+      if (filters.age) queryParams.append('age', filters.age);
+      if (filters.gender) queryParams.append('gender', filters.gender);
+      if (filters.caste) queryParams.append('caste', filters.caste);
+      if (filters.occupation) queryParams.append('occupation', filters.occupation);
+      if (filters.residence) queryParams.append('residence', filters.residence);
+      if (filters.applicationMode) queryParams.append('application_mode', filters.applicationMode);
+      if (filters.schemeCategory) queryParams.append('scheme_category', filters.schemeCategory);
+      if (filters.schemeName) queryParams.append('scheme_name', filters.schemeName);
+      if (filters.level) queryParams.append('level', filters.level);
+      if (filters.differentlyAbled) queryParams.append('differently_abled', filters.differentlyAbled);
+      if (filters.maritalStatus) queryParams.append('marital_status', filters.maritalStatus);
+      if (filters.benefitType) queryParams.append('benefit_type', filters.benefitType);
+      if (filters.governmentEmployee) queryParams.append('government_employee', filters.governmentEmployee);
+      if (filters.employmentStatus) queryParams.append('employment_status', filters.employmentStatus);
+      if (filters.minority) queryParams.append('minority', filters.minority);
+      
+      // Add search term from the main search bar to scheme_name parameter
+      if (searchTerm.trim()) queryParams.append('scheme_name', searchTerm.trim());
+      
+      // Make the API call
+      const response = await axios.get(
+        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?${queryParams.toString()}`
+      );
+      
+      // Update state with the response data
+      setPosts(response.data.schemes || []);
+      setTotalPages(response.data.totalPages || 1);
+      setCurrentPage(response.data.currentPage || 1);
+      setTotalItems(response.data.totalItems || 0); // Store total items count
+      
+      console.log("Fetched data:", response.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      // Use sample data if API fetch fails
+      setPosts(sampleSchemes);
+      setTotalPages(1);
+      setTotalItems(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Call fetchData when filters change or page changes
+  useEffect(() => {
+    fetchData(currentPage);
+  }, [currentPage, filters.age, filters.gender, filters.caste, filters.occupation, 
+      filters.residence, filters.applicationMode, filters.schemeCategory, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+      // Scroll to top when page changes
+      window.scrollTo(0, 0);
+    }
+  };
+
+  // Function to reset all filters and reload data
+  const resetFilters = () => {
+    const resetObj = {
+      state: "Tamil Nadu",
+      gender: "",
+      caste: "",
+      ministry: "",
+      residence: "",
+      schemeName: "",
+      schemeCategory: "",
+      level: "",
+      age: "",
+      differentlyAbled: "",
+      maritalStatus: "",
+      occupation: "",
+      applicationMode: "",
+      benefitType: "",
+      governmentEmployee: "",
+      employmentStatus: "",
+      minority: ""
+    };
+    setFilters(resetObj);
+    setCurrentPage(1); // Reset to first page
+  };
+
+  // Use sample data if API fetch fails
+  const displayData = posts.length > 0 ? posts : sampleSchemes;
+
+  // Function to check eligibility
+  const checkEligibility = () => {
+    // For future implementation if needed
+    console.log("Eligibility check functionality removed");
+  };
+
+  // Function to handle back button click
+  const handleBackClick = () => {
+    navigate(-1); // Navigate to the previous page in history
+  };
+
+  // Function to check if a filter should be displayed for the current category
+  const shouldShowFilter = (filterName) => {
+    return currentFilterConfig.includes(filterName);
+  };
+
+  // Handle search submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setCurrentPage(1); // Reset to first page when searching
+    fetchData(1);
+  };
+
+  return (
+    <ErrorBoundary>
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        {/* Banner - Now using dynamic content */}
+        <div className="bg-amber-50 py-4">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-center justify-between">
+              <div className="mb-4 md:mb-0">
+                <h1 className="text-amber-800 text-2xl font-bold">
+                  {bannerCategory.title}
+                </h1>
+                {bannerCategory.subtitle && (
+                  <h2 className="text-amber-800 text-2xl font-bold">{bannerCategory.subtitle}</h2>
+                )}
+              </div>
+              <div className="flex items-center">
+                <img
+                  src={bannerCategory.image}
+                  alt={`${bannerCategory.title} illustration`}
+                  className="h-16 md:h-24"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex text-blue-500 items-center mb-4 cursor-pointer" onClick={handleBackClick}>
+            <ArrowLeft size={16} className="mr-1" />
+            <span>Back</span>
+          </div>
+
+          <div className="flex flex-wrap">
+            {/* Left sidebar - Filters */}
+            <div className="w-full md:w-1/4 pr-0 md:pr-4 mb-4 md:mb-0">
+              <div className="bg-white rounded shadow p-4 mb-4 sticky top-20">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-gray-700">Filter By</h3>
+                  <button
+                    className="text-green-600 text-sm font-medium hover:text-green-700"
+                    onClick={resetFilters}
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+
+                {/* Scheme Name Filter */}
+                {shouldShowFilter("schemeName") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("schemeName")}
+                    >
+                      <span className="font-medium">Scheme Name</span>
+                      {expandedFilters.schemeName ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.schemeName && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          placeholder="Search scheme name"
+                          className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          value={filters.schemeName}
+                          onChange={(e) =>
+                            handleFilterChange("schemeName", e.target.value)
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Scheme Category Filter */}
+                {shouldShowFilter("schemeCategory") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("schemeCategory")}
+                    >
+                      <span className="font-medium">Scheme Category</span>
+                      {expandedFilters.schemeCategory ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.schemeCategory && (
+                      <div className="mt-2">
+                        <select
+                          className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          value={filters.schemeCategory}
+                          disabled={true}
+                        >
+                          <option value="">All Categories</option>
+                          <option value="Education & Learning">Education & Learning</option>
+                          <option value="Health & Wellness">Health & Wellness</option>
+                          <option value="Housing & Shelter">Housing & Shelter</option>
+                          <option value="Agriculture,Rural & Environment">Agriculture,Rural & Environment</option>
+                          <option value="Business & Entrepreneurship">Business & Entrepreneurship</option>
+                          <option value="Women and Child">Women and Child</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Category is auto-selected based on section</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Level Filter */}
+                {shouldShowFilter("level") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("level")}
+                    >
+                      <span className="font-medium">Level</span>
+                      {expandedFilters.level ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.level && (
+                      <div className="mt-2">
+                        {filterOptions.level.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="level"
+                                className="mr-2"
+                                checked={filters.level === option.toLowerCase()}
+                                onChange={() => handleFilterChange("level", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* State Filter */}
+                {shouldShowFilter("state") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("state")}
+                    >
+                      <span className="font-medium">State</span>
+                      {expandedFilters.state ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.state && (
+                      <div className="mt-2">
+                        <div className="border rounded p-2 flex justify-between items-center">
+                          <div className="flex items-center">
+                            <span>Tamil Nadu</span>
+                            <button
+                              onClick={() => handleFilterChange("state", "")}
+                              className="ml-2 text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <ChevronDown size={16} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Age Filter */}
+                {shouldShowFilter("age") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("age")}
+                    >
+                      <span className="font-medium">Age</span>
+                      {expandedFilters.age ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.age && (
+                      <div className="mt-2">
+                        <div className="flex space-x-2">
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            className="w-1/2 border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            min="0"
+                            max="120"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            className="w-1/2 border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            min="0"
+                            max="120"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Gender Filter */}
+                {shouldShowFilter("gender") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("gender")}
+                    >
+                      <span className="font-medium">Gender</span>
+                      {expandedFilters.gender ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.gender && (
+                      <div className="mt-2">
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="gender"
+                              className="mr-2"
+                              checked={filters.gender === ""}
+                              onChange={() => handleFilterChange("gender", "")}
+                            />
+                            <span>All</span>
+                          </label>
+                          <span className="text-xs text-gray-500">52</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="gender"
+                              className="mr-2"
+                              checked={filters.gender === "female"}
+                              onChange={() => handleFilterChange("gender", "female")}
+                            />
+                            <span>Female</span>
+                          </label>
+                          <span className="text-xs text-gray-500">10</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="gender"
+                              className="mr-2"
+                              checked={filters.gender === "male"}
+                              onChange={() => handleFilterChange("gender", "male")}
+                            />
+                            <span>Male</span>
+                          </label>
+                          <span className="text-xs text-gray-500">5</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="gender"
+                              className="mr-2"
+                              checked={filters.gender === "transgender"}
+                              onChange={() =>
+                                handleFilterChange("gender", "transgender")
+                              }
+                            />
+                            <span>Transgender</span>
+                          </label>
+                          <span className="text-xs text-gray-500">1</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Caste Filter */}
+                {shouldShowFilter("caste") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("caste")}
+                    >
+                      <span className="font-medium">Caste</span>
+                      {expandedFilters.caste ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.caste && (
+                      <div className="mt-2">
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="caste"
+                              className="mr-2"
+                              checked={filters.caste === ""}
+                              onChange={() => handleFilterChange("caste", "")}
+                            />
+                            <span>All</span>
+                          </label>
+                          <span className="text-xs text-gray-500">74</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="caste"
+                              className="mr-2"
+                              checked={filters.caste === "sc"}
+                              onChange={() => handleFilterChange("caste", "sc")}
+                            />
+                            <span>Scheduled Caste (SC)</span>
+                          </label>
+                          <span className="text-xs text-gray-500">12</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="caste"
+                              className="mr-2"
+                              checked={filters.caste === "obc"}
+                              onChange={() => handleFilterChange("caste", "obc")}
+                            />
+                            <span>Other Backward Class (OBC)</span>
+                          </label>
+                          <span className="text-xs text-gray-500">4</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="caste"
+                              className="mr-2"
+                              checked={filters.caste === "st"}
+                              onChange={() => handleFilterChange("caste", "st")}
+                            />
+                            <span>Scheduled Tribe (ST)</span>
+                          </label>
+                          <span className="text-xs text-gray-500">3</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name="caste"
+                              className="mr-2"
+                              checked={filters.caste === "pvtg"}
+                              onChange={() => handleFilterChange("caste", "pvtg")}
+                            />
+                            <span>Particularly Vulnerable Tribal Group</span>
+                          </label>
+                          <span className="text-xs text-gray-500">1</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Ministry Name Filter */}
+                <div className="mb-4 border-b pb-2">
+                  <div
+                    className="flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleFilter("ministry")}
+                  >
+                    <span className="font-medium">Ministry Name</span>
+                    {expandedFilters.ministry ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </div>
+                  {expandedFilters.ministry && (
+                    <div className="mt-2">
+                      <select
+                        className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={filters.ministry}
+                        onChange={(e) =>
+                          handleFilterChange("ministry", e.target.value)
+                        }
+                      >
+                        <option value="">Select</option>
+                        <option value="finance">Ministry of Finance</option>
+                        <option value="rural">Ministry of Rural Development</option>
+                        <option value="labour">
+                          Ministry of Labour and Employment
+                        </option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Residence Filter */}
+                {shouldShowFilter("residence") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("residence")}
+                    >
+                      <span className="font-medium">Residence</span>
+                      <div className="flex items-center">
+                        <span className="text-xs bg-gray-100 rounded-full px-2 py-0.5 mr-1">
+                          4
+                        </span>
+                        {expandedFilters.residence ? (
+                          <ChevronUp size={16} />
+                        ) : (
+                          <ChevronDown size={16} />
+                        )}
+                      </div>
+                    </div>
+                    {expandedFilters.residence && (
+                      <div className="mt-2">
+                        {filterOptions.residence.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="residence"
+                                className="mr-2"
+                                checked={filters.residence === option.toLowerCase()}
+                                onChange={() => handleFilterChange("residence", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Differently Abled Filter */}
+                {shouldShowFilter("differentlyAbled") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("differentlyAbled")}
+                    >
+                      <span className="font-medium">Differently Abled</span>
+                      {expandedFilters.differentlyAbled ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.differentlyAbled && (
+                      <div className="mt-2">
+                        {filterOptions.differentlyAbled.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="differentlyAbled"
+                                className="mr-2"
+                                checked={filters.differentlyAbled === option.toLowerCase()}
+                                onChange={() => handleFilterChange("differentlyAbled", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Marital Status Filter */}
+                {shouldShowFilter("maritalStatus") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("maritalStatus")}
+                    >
+                      <span className="font-medium">Marital Status</span>
+                      {expandedFilters.maritalStatus ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.maritalStatus && (
+                      <div className="mt-2">
+                        {filterOptions.maritalStatus.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="maritalStatus"
+                                className="mr-2"
+                                checked={filters.maritalStatus === option.toLowerCase()}
+                                onChange={() => handleFilterChange("maritalStatus", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Occupation Filter */}
+                {shouldShowFilter("occupation") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("occupation")}
+                    >
+                      <span className="font-medium">Occupation</span>
+                      {expandedFilters.occupation ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.occupation && (
+                      <div className="mt-2 max-h-48 overflow-y-auto">
+                        {filterOptions.occupation.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="occupation"
+                                className="mr-2"
+                                checked={filters.occupation === option.toLowerCase().replace(/\s+/g, '-')}
+                                onChange={() => handleFilterChange("occupation", option.toLowerCase().replace(/\s+/g, '-'))}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Application Mode Filter */}
+                {shouldShowFilter("applicationMode") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("applicationMode")}
+                    >
+                      <span className="font-medium">Application Mode</span>
+                      {expandedFilters.applicationMode ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.applicationMode && (
+                      <div className="mt-2">
+                        {filterOptions.applicationMode.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="applicationMode"
+                                className="mr-2"
+                                checked={filters.applicationMode === option.toLowerCase()}
+                                onChange={() => handleFilterChange("applicationMode", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Benefit Type Filter */}
+                {shouldShowFilter("benefitType") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("benefitType")}
+                    >
+                      <span className="font-medium">Benefit Type</span>
+                      {expandedFilters.benefitType ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.benefitType && (
+                      <div className="mt-2">
+                        {filterOptions.benefitType.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="benefitType"
+                                className="mr-2"
+                                checked={filters.benefitType === option.toLowerCase()}
+                                onChange={() => handleFilterChange("benefitType", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Government Employee Filter */}
+                {shouldShowFilter("governmentEmployee") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("governmentEmployee")}
+                    >
+                      <span className="font-medium">Government Employee</span>
+                      {expandedFilters.governmentEmployee ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.governmentEmployee && (
+                      <div className="mt-2">
+                        {filterOptions.governmentEmployee.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="governmentEmployee"
+                                className="mr-2"
+                                checked={filters.governmentEmployee === option.toLowerCase()}
+                                onChange={() => handleFilterChange("governmentEmployee", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Employment Status Filter */}
+                {shouldShowFilter("employmentStatus") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("employmentStatus")}
+                    >
+                      <span className="font-medium">Employment Status</span>
+                      {expandedFilters.employmentStatus ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.employmentStatus && (
+                      <div className="mt-2">
+                        {filterOptions.employmentStatus.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="employmentStatus"
+                                className="mr-2"
+                                checked={filters.employmentStatus === option.toLowerCase().replace(/\s+/g, '-')}
+                                onChange={() => handleFilterChange("employmentStatus", option.toLowerCase().replace(/\s+/g, '-'))}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Minority Filter */}
+                {shouldShowFilter("minority") && (
+                  <div className="mb-4 border-b pb-2">
+                    <div
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleFilter("minority")}
+                    >
+                      <span className="font-medium">Minority</span>
+                      {expandedFilters.minority ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                    {expandedFilters.minority && (
+                      <div className="mt-2">
+                        {filterOptions.minority.map((option, index) => (
+                          <div key={index} className="flex justify-between items-center mb-1">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="minority"
+                                className="mr-2"
+                                checked={filters.minority === option.toLowerCase()}
+                                onChange={() => handleFilterChange("minority", option.toLowerCase())}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Show more filters button (visible only on mobile) */}
+                <button className="w-full text-center text-green-600 font-medium py-2 md:hidden">
+                  Show More Filters
+                </button>
+              </div>
+            </div>
+
+            {/* Right content area */}
+            <div className="w-full md:w-3/4">
+              <div className="bg-white rounded shadow p-4 mb-4">
+                {/* Top actions */}
+                <div className="flex flex-col md:flex-row md:justify-between mb-6">
+                  {/* Search bar */}
+                  <div className="flex w-full md:max-w-2xl mb-4 md:mb-0">
+                    <form onSubmit={handleSearch} className="flex w-full">
+                      <div className="relative flex-grow">
+                        <input
+                          type="text"
+                          placeholder="Search schemes"
+                          className="w-full border rounded p-2 pl-8 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400">
+                          <Search size={18} />
+                        </div>
+                        <div className="absolute left-0 -bottom-6 text-xs text-gray-500">
+                          Tip: For exact match, put the words in quotes. For
+                          example: "Scheme Name"
+                        </div>
+                      </div>
+                      <button 
+                        type="submit"
+                        className="bg-amber-500 hover:bg-amber-600 text-white px-4 rounded ml-2 flex items-center justify-center">
+                        <Search size={18} />
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex border-b mb-4 overflow-x-auto scrollbar-hide">
+                  <button
+                    className={`font-medium px-4 py-2 whitespace-nowrap ${
+                      activeTab === "all"
+                        ? "border-b-2 border-amber-500 text-amber-500"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                    onClick={() => setActiveTab("all")}
+                  >
+                    All Schemes
+                  </button>
+                  <button
+                    className={`font-medium px-4 py-2 whitespace-nowrap ${
+                      activeTab === "state"
+                        ? "border-b-2 border-amber-500 text-amber-500"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                    onClick={() => setActiveTab("state")}
+                  >
+                    State Schemes
+                  </button>
+                  <button
+                    className={`font-medium px-4 py-2 whitespace-nowrap ${
+                      activeTab === "central"
+                        ? "border-b-2 border-amber-500 text-amber-500"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                    onClick={() => setActiveTab("central")}
+                  >
+                    Central Schemes
+                  </button>
+                </div>
+
+                {/* Results count and sort */}
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <span>
+                      We found <strong>{totalItems}</strong> schemes based
+                      on your preferences
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <span className="mr-2">Sort:</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">Relevance</span>
+                      <ChevronDown size={16} className="ml-1" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* View toggle - List or Table */}
+                <div className="flex justify-end mb-4">
+                  <div className="bg-gray-100 rounded-lg p-1 flex">
+                    <button
+                      className={`px-3 py-1 rounded-md ${
+                        viewMode === "list" ? "bg-white shadow" : ""
+                      }`}
+                      onClick={() => setViewMode("list")}
+                    >
+                      List View
+                    </button>
+                    <button
+                      className={`px-3 py-1 rounded-md ${
+                        viewMode === "table" ? "bg-white shadow" : ""
+                      }`}
+                      onClick={() => setViewMode("table")}
+                    >
+                      Table View
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading indicator */}
+                {loading ? (
+                  <div className="flex justify-center items-center my-12">
+                    <CircularProgress color="success" />
+                    <span className="ml-4 text-gray-600">Loading schemes...</span>
+                  </div>
+                ) : viewMode === "table" ? (
+                  // Table View
+                  <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+                    <Table>
+                      <TableHead sx={{ backgroundColor: "#22cc55" }}>
+                        <TableRow>
+                          {[
+                            "Scheme ID",
+                            "Name",
+                            "Description",
+                            "Department",
+                            "Eligibility",
+                            "Benefits",
+                            "Process",
+                            "Website",
+                          ].map((head) => (
+                            <TableCell
+                              key={head}
+                              sx={{ fontWeight: "bold", color: "#fff" }}
+                            >
+                              {head}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {displayData.map((item) => (
+                          <TableRow key={item.scheme_id}>
+                            <TableCell>{item.scheme_id}</TableCell>
+                            <TableCell>{item.scheme_name}</TableCell>
+                            <TableCell>{item.description}</TableCell>
+                            <TableCell>{item.department}</TableCell>
+                            <TableCell>{item.eligibility_criteria}</TableCell>
+                            <TableCell>{item.benefits}</TableCell>
+                            <TableCell>{item.application_process}</TableCell>
+                            <TableCell>
+                              <a
+                                href={item.official_website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                Visit Site
+                              </a>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  // List View
+                  <>
+                    {displayData.map((scheme) => (
+                      <div
+                        key={scheme.scheme_id}
+                        className="border rounded-lg mb-6 overflow-hidden"
+                      >
+                        <div className="p-4">
+                          <h3 className="text-lg font-medium text-gray-800 mb-1">
+                            {scheme.scheme_name}
+                          </h3>
+                          <p className="text-gray-500 text-sm mb-2">
+                            {scheme.department}
+                          </p>
+
+                          <p className="text-gray-700 text-sm mb-3">
+                            {scheme.description}
+                          </p>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                              <h4 className="font-medium text-gray-700">
+                                Eligibility:
+                              </h4>
+                              <p className="text-sm">
+                                {scheme.eligibility_criteria}
+                              </p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-700">
+                                Benefits:
+                              </h4>
+                              <p className="text-sm">{scheme.benefits}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-700">
+                                Process:
+                              </h4>
+                              <p className="text-sm">
+                                {scheme.application_process}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center">
+                            <div className="flex flex-wrap gap-2">
+                              {/* Fix: Added null check for department */}
+                              {scheme.department &&
+                              typeof scheme.department === "string" ? (
+                                scheme.department.split(" ").map((tag, index) => (
+                                  <span
+                                    key={index}
+                                    className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">
+                                  No Department
+                                </span>
+                              )}
+                            </div>
+                            <a
+                              href={scheme.official_website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-green-600 text-white px-4 py-1 rounded-full text-sm"
+                            >
+                              Apply Now
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* Pagination */}
+                {!loading && (
+                  <div className="flex flex-col items-center mt-8">
+                    <div className="text-sm text-gray-500 mb-4">
+                      Showing page {currentPage} of {totalPages} ({totalItems} total schemes)
+                    </div>
+                    <div className="flex items-center">
+                      <button
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          currentPage === 1 ? "text-gray-300" : "bg-green-600 text-white"
+                        }`}
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      
+                      {/* First page */}
+                      {currentPage > 3 && (
+                        <button
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 mx-1 hover:bg-gray-200"
+                          onClick={() => handlePageChange(1)}
+                        >
+                          1
+                        </button>
+                      )}
+                      
+                      {/* Ellipsis for skipped pages at the beginning */}
+                      {currentPage > 3 && <span className="mx-1">...</span>}
+                      
+                      {/* Pages before current */}
+                      {currentPage > 1 && (
+                        <button
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 mx-1 hover:bg-gray-200"
+                          onClick={() => handlePageChange(currentPage - 1)}
+                        >
+                          {currentPage - 1}
+                        </button>
+                      )}
+                      
+                      {/* Current page */}
+                      <button
+                        className="w-8 h-8 rounded-full flex items-center justify-center bg-amber-500 text-white mx-1"
+                      >
+                        {currentPage}
+                      </button>
+                      
+                      {/* Pages after current */}
+                      {currentPage < totalPages && (
+                        <button
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 mx-1 hover:bg-gray-200"
+                          onClick={() => handlePageChange(currentPage + 1)}
+                        >
+                          {currentPage + 1}
+                        </button>
+                      )}
+                      
+                      {/* Ellipsis for skipped pages at the end */}
+                      {currentPage < totalPages - 2 && <span className="mx-1">...</span>}
+                      
+                      {/* Last page */}
+                      {currentPage < totalPages - 2 && (
+                        <button
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 mx-1 hover:bg-gray-200"
+                          onClick={() => handlePageChange(totalPages)}
+                        >
+                          {totalPages}
+                        </button>
+                      )}
+                      
+                      <button
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          currentPage === totalPages ? "text-gray-300" : "bg-green-600 text-white"
+                        }`}
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ErrorBoundary>
+  );
+}

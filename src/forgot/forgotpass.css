@@ -1,0 +1,82 @@
+/* forgot.css */
+.forgottank {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f4f4f4;
+}
+
+.forgotcontainer {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  width: 400px;
+  text-align: center;
+}
+
+.forgotlogo img {
+  max-width: 120px;
+  margin-bottom: 20px;
+}
+
+.forgotsteps h1 {
+  font-size: 22px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.forgotsteps p {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.forgotenter p {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+  text-align: left;
+}
+
+.email {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.forgotReqlink {
+  margin-top: 20px;
+}
+
+.forgotreqlink {
+  width: 100%;
+  background-color: #0070d2;
+  color: white;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.forgotreqlink:hover {
+  background-color: #005fb2;
+}
+
+.forgotbcklog {
+  margin-top: 15px;
+}
+
+.forgotbcklog a {
+  color: #0070d2;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.forgotbcklog a:hover {
+  text-decoration: underline;
+}
