@@ -7,6 +7,7 @@ import Homescreen from "./homescreen.jsx";
 import SignupForm from "./Register_form/signup";
 import TailwindTest from "./TailwindTest";
 import Header from "./components/Header";
+import Profile from "./components/Profile";
 // import Forgot from "./forgot/forgotpass.jsx";
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           {/* <Route path="/forgot" element={<Forgot />} /> */}
           <Route path="/signup" element={<SignupForm />} />
           <Route path="/tailwind-test" element={<TailwindTest />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </Router>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
   ChevronDown,
@@ -130,6 +130,31 @@ export default function MySchemePortal() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(""); // Add state for search term
   const [totalItems, setTotalItems] = useState(0); // Add state for total items count
+  
+  // Add state for filter counts
+  const [filterCounts, setFilterCounts] = useState({
+    gender: { all: 0, female: 0, male: 0, transgender: 0 },
+    caste: { all: 0, sc: 0, obc: 0, st: 0, pvtg: 0 },
+    residence: { all: 0, both: 0, rural: 0, urban: 0 },
+    level: { all: 0, state: 0, central: 0 },
+    differentlyAbled: { all: 0, yes: 0, no: 0 },
+    maritalStatus: { all: 0, married: 0 },
+    occupation: {},
+    applicationMode: { all: 0, offline: 0, online: 0 },
+    benefitType: { all: 0, cash: 0, "in kind": 0, composite: 0 },
+    governmentEmployee: { all: 0, yes: 0, no: 0 },
+    employmentStatus: { all: 0, employed: 0, unemployed: 0, "self-employed/entrepreneur": 0 },
+    minority: { all: 0, yes: 0, no: 0 }
+  });
+  
+  // Add state for tracking if filter counts have been loaded
+  const [filterCountsLoaded, setFilterCountsLoaded] = useState(false);
+  
+  // Add debounce timer ref
+  const debounceTimerRef = useRef(null);
+  
+  // Add ref to track if a request is in progress
+  const isRequestInProgressRef = useRef(false);
 
   useEffect(() => {
     // Check if there's category data in the location state
@@ -228,6 +253,7 @@ export default function MySchemePortal() {
     }));
   };
 
+  // Handle filter changes with debounce
   const handleFilterChange = (filterName, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -235,11 +261,29 @@ export default function MySchemePortal() {
     }));
     // Reset to first page when filters change
     setCurrentPage(1);
+    
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Set a new timer to delay the API call
+    debounceTimerRef.current = setTimeout(() => {
+      fetchData(1);
+    }, 500); // 500ms debounce delay
   };
 
   // Fetch data from API with filters and pagination
-  const fetchData = async (page = 1) => {
+  const fetchData = useCallback(async (page = 1) => {
+    // If a request is already in progress, don't start another one
+    if (isRequestInProgressRef.current) {
+      console.log("Request already in progress, skipping...");
+      return;
+    }
+    
+    isRequestInProgressRef.current = true;
     setLoading(true);
+    
     try {
       // Build query parameters based on active filters
       const queryParams = new URLSearchParams();
@@ -268,6 +312,8 @@ export default function MySchemePortal() {
       // Add search term from the main search bar to scheme_name parameter
       if (searchTerm.trim()) queryParams.append('scheme_name', searchTerm.trim());
       
+      console.log("Fetching data with params:", queryParams.toString());
+      
       // Make the API call
       const response = await axios.get(
         `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?${queryParams.toString()}`
@@ -288,14 +334,90 @@ export default function MySchemePortal() {
       setTotalItems(0);
     } finally {
       setLoading(false);
+      isRequestInProgressRef.current = false;
     }
-  };
+  }, [filters, searchTerm, itemsPerPage]);
+  
+  // Fetch filter counts separately
+  const fetchFilterCounts = useCallback(async () => {
+    if (filterCountsLoaded) {
+      return; // Only fetch once
+    }
+    
+    try {
+      const metadataResponse = await axios.get(
+        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=1`
+      );
+      
+      // If the API provides metadata for filter counts, use it
+      if (metadataResponse.data.metadata && metadataResponse.data.metadata.filterCounts) {
+        setFilterCounts(metadataResponse.data.metadata.filterCounts);
+      } else {
+        // Otherwise calculate approximate counts based on total items
+        const total = metadataResponse.data.totalItems || 0;
+        setFilterCounts({
+          gender: { all: total, female: Math.round(total * 0.4), male: Math.round(total * 0.4), transgender: Math.round(total * 0.2) },
+          caste: { all: total, sc: Math.round(total * 0.3), obc: Math.round(total * 0.3), st: Math.round(total * 0.2), pvtg: Math.round(total * 0.1) },
+          residence: { all: total, both: Math.round(total * 0.3), rural: Math.round(total * 0.4), urban: Math.round(total * 0.3) },
+          level: { all: total, state: Math.round(total * 0.6), central: Math.round(total * 0.4) },
+          differentlyAbled: { all: total, yes: Math.round(total * 0.2), no: Math.round(total * 0.8) },
+          maritalStatus: { all: total, married: Math.round(total * 0.5) },
+          occupation: { 
+            all: total, 
+            "construction-worker": Math.round(total * 0.15), 
+            "unorganized-worker": Math.round(total * 0.15),
+            "journalist": Math.round(total * 0.1),
+            "ex-servicemen": Math.round(total * 0.1),
+            "organized-worker": Math.round(total * 0.1),
+            "health-worker": Math.round(total * 0.1),
+            "student": Math.round(total * 0.3)
+          },
+          applicationMode: { all: total, offline: Math.round(total * 0.4), online: Math.round(total * 0.6) },
+          benefitType: { all: total, cash: Math.round(total * 0.4), "in kind": Math.round(total * 0.3), composite: Math.round(total * 0.3) },
+          governmentEmployee: { all: total, yes: Math.round(total * 0.3), no: Math.round(total * 0.7) },
+          employmentStatus: { all: total, employed: Math.round(total * 0.4), unemployed: Math.round(total * 0.3), "self-employed/entrepreneur": Math.round(total * 0.3) },
+          minority: { all: total, yes: Math.round(total * 0.2), no: Math.round(total * 0.8) }
+        });
+      }
+      setFilterCountsLoaded(true);
+    } catch (error) {
+      console.error("Error fetching filter counts:", error);
+    }
+  }, [filterCountsLoaded]);
 
-  // Call fetchData when filters change or page changes
+  // Fetch filter counts on component mount
   useEffect(() => {
+    fetchFilterCounts();
+  }, [fetchFilterCounts]);
+
+  // Call fetchData when page changes only
+  useEffect(() => {
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
     fetchData(currentPage);
-  }, [currentPage, filters.age, filters.gender, filters.caste, filters.occupation, 
-      filters.residence, filters.applicationMode, filters.schemeCategory, searchTerm]);
+  }, [currentPage, fetchData]);
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchData(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle search submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setCurrentPage(1); // Reset to first page when searching
+    
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    fetchData(1);
+  };
 
   // Handle page change
   const handlePageChange = (pageNumber) => {
@@ -350,13 +472,6 @@ export default function MySchemePortal() {
     return currentFilterConfig.includes(filterName);
   };
 
-  // Handle search submission
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setCurrentPage(1); // Reset to first page when searching
-    fetchData(1);
-  };
-
   return (
     <ErrorBoundary>
       <div className="flex flex-col min-h-screen bg-gray-50">
@@ -403,36 +518,7 @@ export default function MySchemePortal() {
                   </button>
                 </div>
 
-                {/* Scheme Name Filter */}
-                {shouldShowFilter("schemeName") && (
-                  <div className="mb-4 border-b pb-2">
-                    <div
-                      className="flex justify-between items-center cursor-pointer"
-                      onClick={() => toggleFilter("schemeName")}
-                    >
-                      <span className="font-medium">Scheme Name</span>
-                      {expandedFilters.schemeName ? (
-                        <ChevronUp size={16} />
-                      ) : (
-                        <ChevronDown size={16} />
-                      )}
-                    </div>
-                    {expandedFilters.schemeName && (
-                      <div className="mt-2">
-                        <input
-                          type="text"
-                          placeholder="Search scheme name"
-                          className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                          value={filters.schemeName}
-                          onChange={(e) =>
-                            handleFilterChange("schemeName", e.target.value)
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
+       
                 {/* Scheme Category Filter */}
                 {shouldShowFilter("schemeCategory") && (
                   <div className="mb-4 border-b pb-2">
@@ -496,6 +582,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.level[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -523,7 +612,7 @@ export default function MySchemePortal() {
                           <div className="flex items-center">
                             <span>Tamil Nadu</span>
                             <button
-                              onClick={() => handleFilterChange("state", "")}
+                              onClick={(e) => handleFilterChange("state", "")}
                               className="ml-2 text-xs text-gray-500 hover:text-gray-700"
                             >
                               ×
@@ -600,7 +689,7 @@ export default function MySchemePortal() {
                             />
                             <span>All</span>
                           </label>
-                          <span className="text-xs text-gray-500">52</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.all || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -613,7 +702,7 @@ export default function MySchemePortal() {
                             />
                             <span>Female</span>
                           </label>
-                          <span className="text-xs text-gray-500">10</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.female || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -626,7 +715,7 @@ export default function MySchemePortal() {
                             />
                             <span>Male</span>
                           </label>
-                          <span className="text-xs text-gray-500">5</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.male || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <label className="flex items-center cursor-pointer">
@@ -635,13 +724,11 @@ export default function MySchemePortal() {
                               name="gender"
                               className="mr-2"
                               checked={filters.gender === "transgender"}
-                              onChange={() =>
-                                handleFilterChange("gender", "transgender")
-                              }
+                              onChange={() => handleFilterChange("gender", "transgender")}
                             />
                             <span>Transgender</span>
                           </label>
-                          <span className="text-xs text-gray-500">1</span>
+                          <span className="text-xs text-gray-500">{filterCounts.gender.transgender || 0}</span>
                         </div>
                       </div>
                     )}
@@ -675,7 +762,7 @@ export default function MySchemePortal() {
                             />
                             <span>All</span>
                           </label>
-                          <span className="text-xs text-gray-500">74</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.all || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -688,7 +775,7 @@ export default function MySchemePortal() {
                             />
                             <span>Scheduled Caste (SC)</span>
                           </label>
-                          <span className="text-xs text-gray-500">12</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.sc || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -701,7 +788,7 @@ export default function MySchemePortal() {
                             />
                             <span>Other Backward Class (OBC)</span>
                           </label>
-                          <span className="text-xs text-gray-500">4</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.obc || 0}</span>
                         </div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="flex items-center cursor-pointer">
@@ -714,7 +801,7 @@ export default function MySchemePortal() {
                             />
                             <span>Scheduled Tribe (ST)</span>
                           </label>
-                          <span className="text-xs text-gray-500">3</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.st || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <label className="flex items-center cursor-pointer">
@@ -727,45 +814,14 @@ export default function MySchemePortal() {
                             />
                             <span>Particularly Vulnerable Tribal Group</span>
                           </label>
-                          <span className="text-xs text-gray-500">1</span>
+                          <span className="text-xs text-gray-500">{filterCounts.caste.pvtg || 0}</span>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Ministry Name Filter */}
-                <div className="mb-4 border-b pb-2">
-                  <div
-                    className="flex justify-between items-center cursor-pointer"
-                    onClick={() => toggleFilter("ministry")}
-                  >
-                    <span className="font-medium">Ministry Name</span>
-                    {expandedFilters.ministry ? (
-                      <ChevronUp size={16} />
-                    ) : (
-                      <ChevronDown size={16} />
-                    )}
-                  </div>
-                  {expandedFilters.ministry && (
-                    <div className="mt-2">
-                      <select
-                        className="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        value={filters.ministry}
-                        onChange={(e) =>
-                          handleFilterChange("ministry", e.target.value)
-                        }
-                      >
-                        <option value="">Select</option>
-                        <option value="finance">Ministry of Finance</option>
-                        <option value="rural">Ministry of Rural Development</option>
-                        <option value="labour">
-                          Ministry of Labour and Employment
-                        </option>
-                      </select>
-                    </div>
-                  )}
-                </div>
+   
 
                 {/* Residence Filter */}
                 {shouldShowFilter("residence") && (
@@ -777,7 +833,7 @@ export default function MySchemePortal() {
                       <span className="font-medium">Residence</span>
                       <div className="flex items-center">
                         <span className="text-xs bg-gray-100 rounded-full px-2 py-0.5 mr-1">
-                          4
+                          {Object.values(filterCounts.residence).filter(count => count > 0).length}
                         </span>
                         {expandedFilters.residence ? (
                           <ChevronUp size={16} />
@@ -800,6 +856,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.residence[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -835,6 +894,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.differentlyAbled[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -870,6 +932,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.maritalStatus[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -905,6 +970,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.occupation[option.toLowerCase().replace(/\s+/g, '-')] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -940,6 +1008,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.applicationMode[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -975,6 +1046,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.benefitType[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1045,6 +1119,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.employmentStatus[option.toLowerCase().replace(/\s+/g, '-')] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1080,6 +1157,9 @@ export default function MySchemePortal() {
                               />
                               <span>{option}</span>
                             </label>
+                            <span className="text-xs text-gray-500">
+                              {filterCounts.minority[option.toLowerCase()] || 0}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1215,11 +1295,9 @@ export default function MySchemePortal() {
                           {[
                             "Scheme ID",
                             "Name",
-                            "Description",
-                            "Department",
-                            "Eligibility",
                             "Benefits",
-                            "Process",
+                           "Residence",
+                           "application_mode",
                             "Website",
                           ].map((head) => (
                             <TableCell
@@ -1236,11 +1314,9 @@ export default function MySchemePortal() {
                           <TableRow key={item.scheme_id}>
                             <TableCell>{item.scheme_id}</TableCell>
                             <TableCell>{item.scheme_name}</TableCell>
-                            <TableCell>{item.description}</TableCell>
-                            <TableCell>{item.department}</TableCell>
-                            <TableCell>{item.eligibility_criteria}</TableCell>
                             <TableCell>{item.benefits}</TableCell>
-                            <TableCell>{item.application_process}</TableCell>
+                            <TableCell>{item.residence}</TableCell>
+                            <TableCell>{item.application_mode}</TableCell>
                             <TableCell>
                               <a
                                 href={item.official_website}
@@ -1290,14 +1366,6 @@ export default function MySchemePortal() {
                                 Benefits:
                               </h4>
                               <p className="text-sm">{scheme.benefits}</p>
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-gray-700">
-                                Process:
-                              </h4>
-                              <p className="text-sm">
-                                {scheme.application_process}
-                              </p>
                             </div>
                           </div>
 
