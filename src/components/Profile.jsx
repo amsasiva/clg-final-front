@@ -56,10 +56,10 @@ function Profile() {
           </div>
           
           <div className="space-y-4">
-            <div className="border-b pb-2">
+            {/* <div className="border-b pb-2">
               <h2 className="text-sm text-gray-500">Full Name</h2>
               <p className="text-lg font-medium">{userData.name}</p>
-            </div>
+            </div> */}
             
             <div className="border-b pb-2">
               <h2 className="text-sm text-gray-500">Username</h2>

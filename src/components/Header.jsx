@@ -18,7 +18,7 @@ function Header() {
         try {
           const user = JSON.parse(userStr);
           setIsLoggedIn(true);
-          setDisplayName(user.name || '');
+          setDisplayName(user.username || '');
           setHasUsername(!!user.username); // Convert to boolean
         } catch (error) {
           console.error('Error parsing user data from localStorage:', error);

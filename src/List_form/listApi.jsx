@@ -866,7 +866,7 @@ export default function MySchemePortal() {
                 )}
 
                 {/* Age Filter */}
-                {shouldShowFilter("age") && (
+                {/* {shouldShowFilter("age") && (
                   <div className="mb-4 border-b pb-2">
                     <div
                       className="flex justify-between items-center cursor-pointer"
@@ -905,7 +905,7 @@ export default function MySchemePortal() {
                       </div>
                     )}
                   </div>
-                )}
+                )} */}
 
                 {/* Gender Filter */}
                 {shouldShowFilter("gender") && (
