@@ -144,7 +144,8 @@ const App = () => {
         {/* Left Side */}
         <Box sx={{ maxWidth: "40%" }}>
           <img
-            src="/assets/project.img.webp"
+            // src="/assets/project.img.webp"
+            src={`${process.env.PUBLIC_URL}/assets/project.img.webp`}
             alt="Farmer using phone"
             style={{ width: "100%", borderRadius: "10px" }}
           />

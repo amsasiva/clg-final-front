@@ -33,7 +33,11 @@ function Forgot() {
     <bag>
       <div className="forgottank">
         <div className="forgotlogo">
-          <img src="/assets/ibi-logo.png" alt="Company Logo" />
+          {/* <img src="/assets/ibi-logo.png" alt="Company Logo" /> */}
+          <img
+            src={`${process.env.PUBLIC_URL}/assets/ibi-logo.png`}
+            alt="Company Logo"
+          />
         </div>
 
         <div className="forgotcontainer">

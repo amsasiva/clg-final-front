@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+// import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route } from "react-router-dom"; // Change here
 import LoginForm from "./login_form/loginsr.jsx";
 
 import ApiTable from "./List_form/listApi.jsx";

@@ -131,7 +131,8 @@ const App = () => {
           <Grid item xs={12} md={5}>
             <Box
               component="img"
-              src="/assets/project.img.webp"
+              // src="/assets/project.img.webp"
+              src={`${process.env.PUBLIC_URL}/assets/project.img.webp`}
               alt="Farmer using phone"
               sx={{
                 width: "100%",
@@ -434,7 +435,8 @@ const App = () => {
             <Grid item xs={12} md={6}>
               <Box
                 component="img"
-                src="/assets/homescreen-img.png"
+                // src="/assets/homescreen-img.png"
+                src={`${process.env.PUBLIC_URL}/assets/homescreen-img.png`}
                 alt="Tamil Nadu farmers using TNschemes"
                 sx={{
                   width: "100%",
