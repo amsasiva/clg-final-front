@@ -429,21 +429,6 @@ const App = () => {
                 and receive guidance on how to apply for different Government
                 schemes without visiting multiple Government websites.
               </Typography>
-
-              {/* <Button
-                variant="outlined"
-                color="success"
-                endIcon={<ChevronRight />}
-                sx={{
-                  mt: 2,
-                  borderRadius: "8px",
-                  fontWeight: "medium",
-                  textTransform: "none",
-                  borderWidth: "1.5px",
-                }}
-              >
-                Learn More
-              </Button> */}
             </Grid>
 
             <Grid item xs={12} md={6}>
