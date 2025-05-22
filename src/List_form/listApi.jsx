@@ -478,7 +478,7 @@ export default function MySchemePortal() {
 
         // Make the API call
         const response = await axios.get(
-          `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?${queryParams.toString()}`
+          `https://clg-backend.onrender.com/dynamicschemes?${queryParams.toString()}`
         );
 
         // Update state with the response data
@@ -521,7 +521,7 @@ export default function MySchemePortal() {
       // Make a single API call with a larger limit to get a representative dataset
       console.log("Fetching filter counts...");
       const countResponse = await axios.get(
-        `https://deploy-nodejs-render-with-postgres.onrender.com/dynamicschemes?page=1&limit=100`
+        `https://clg-backend.onrender.com//dynamicschemes?page=1&limit=100`
       );
 
       // Get the schemes and total count

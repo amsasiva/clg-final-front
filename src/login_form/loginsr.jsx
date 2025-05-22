@@ -26,7 +26,7 @@ function LoginForm() {
 
     try {
       const response = await axios.post(
-        "https://deploy-nodejs-render-with-postgres.onrender.com/signin",
+        "https://clg-backend.onrender.com/signin",
         {
           username,
           password,
