@@ -521,7 +521,7 @@ export default function MySchemePortal() {
       // Make a single API call with a larger limit to get a representative dataset
       console.log("Fetching filter counts...");
       const countResponse = await axios.get(
-        `https://clg-backend.onrender.com//dynamicschemes?page=1&limit=100`
+        `https://clg-backend.onrender.com/dynamicschemes?page=1&limit=100`
       );
 
       // Get the schemes and total count
@@ -1867,19 +1867,19 @@ export default function MySchemePortal() {
                             {scheme.department}
                           </p>
 
-                          <p className="text-gray-700 text-sm mb-3">
+                          {/* <p className="text-gray-700 text-sm mb-3">
                             {scheme.description}
-                          </p>
+                          </p> */}
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div>
+                            {/* <div>
                               <h4 className="font-medium text-gray-700">
                                 Eligibility:
                               </h4>
                               <p className="text-sm">
                                 {scheme.eligibility_criteria}
                               </p>
-                            </div>
+                            </div> */}
                             <div>
                               <h4 className="font-medium text-gray-700">
                                 Benefits:
